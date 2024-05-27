@@ -60,14 +60,14 @@ impl Board {
                     content[ptr] = match piece_char.try_into() {
                         Ok(piece) => {
                             match piece {
-                                Piece::K(true) => {
+                                Piece(PieceType::K, true) => {
                                     if wk_seen {
                                         return Err("Invalid FEN: white cannot have more than one king".to_owned());
                                     }
                                     wk_seen = true;
                                     wk_pos = ptr;
                                 }
-                                Piece::K(false) => {
+                                Piece(PieceType::K, false) => {
                                     if bk_seen {
                                         return Err("Invalid FEN: black cannot have more than one king".to_owned());
                                     }
@@ -154,7 +154,7 @@ impl Board {
         where
             R: std::ops::RangeBounds<usize> + Iterator<Item = usize>,
         {
-            let rook = Occupant::Piece(Piece::R(color));
+            let rook = Occupant::Piece(Piece(PieceType::R, color));
             rng.fold(0, |acc, sq| if content[sq] == rook { acc + 1 } else { acc })
         }
         if castling_rights[0] && count_rooks(wk_pos + 1..=7, true, &content) != 1 {
@@ -287,6 +287,60 @@ impl Board {
     fn idx_to_sq(idx: usize) -> (char, char) {
         ((idx % 8 + 97) as u8 as char, char::from_digit((idx / 8 + 1) as u32, 10).unwrap())
     }
+
+    /// Generates pseudolegal moves based on the board data, castling rights, available en passant target, and the side to move.
+    fn gen_pseudolegal_moves(content: &[Occupant; 64], castling_rights: &[bool; 4], ep_target: Option<usize>, side: bool) -> Vec<Move> {
+        let castling_idx_offset = if side { 0 } else { 2 };
+        for (i, sq) in content.into_iter().enumerate() {
+            if let Occupant::Piece(piece) = sq {
+                if piece.1 != side {
+                    continue;
+                }
+                match piece.0 {
+                    PieceType::K => {
+                        let mut possible_dests = Vec::new();
+                        if i + 1 % 8 != 0 {
+                            possible_dests.push(i + 1);
+                        }
+                        if i % 8 != 0 {
+                            possible_dests.push(i - 1);
+                        }
+                        if i < 56 {
+                            possible_dests.push(i + 8);
+                        }
+                        if i > 7 {
+                            possible_dests.push(i - 8);
+                        }
+                        if !Self::king_capture_possible(content) {
+                            if castling_rights[castling_idx_offset] {
+                                todo!()
+                            }
+                            if castling_rights[castling_idx_offset + 1] {
+                                todo!()
+                            }
+                        }
+                        possible_dests = possible_dests
+                            .into_iter()
+                            .filter(|&dest| match content[dest] {
+                                Occupant::Piece(p) => p.1 != side,
+                                _ => true,
+                            })
+                            .collect();
+                    }
+                    PieceType::Q => todo!(),
+                    PieceType::B => todo!(),
+                    PieceType::N => todo!(),
+                    PieceType::R => todo!(),
+                    PieceType::P => todo!(),
+                }
+            }
+        }
+        todo!()
+    }
+
+    fn king_capture_possible(content: &[Occupant; 64]) -> bool {
+        todo!()
+    }
 }
 
 impl Default for Board {
@@ -303,14 +357,7 @@ enum Occupant {
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-enum Piece {
-    K(bool),
-    Q(bool),
-    B(bool),
-    N(bool),
-    R(bool),
-    P(bool),
-}
+struct Piece(PieceType, bool);
 
 impl TryFrom<char> for Piece {
     type Error = String;
@@ -320,36 +367,51 @@ impl TryFrom<char> for Piece {
             return Err(format!("Invalid piece character: '{value}' is not ASCII alphanumeric"));
         }
         let color = value.is_uppercase();
-        Ok((match value.to_ascii_lowercase() {
-            'k' => Self::K,
-            'q' => Self::Q,
-            'b' => Self::B,
-            'n' => Self::N,
-            'r' => Self::R,
-            'p' => Self::P,
-            _ => return Err(format!("Invalid piece character: '{value}' does not correspond to any chess piece")),
-        })(color))
+        Ok(Self(
+            match value.to_ascii_lowercase() {
+                'k' => PieceType::K,
+                'q' => PieceType::Q,
+                'b' => PieceType::B,
+                'n' => PieceType::N,
+                'r' => PieceType::R,
+                'p' => PieceType::P,
+                _ => return Err(format!("Invalid piece character: '{value}' does not correspond to any chess piece")),
+            },
+            color,
+        ))
     }
 }
 
 impl From<Piece> for char {
     fn from(piece: Piece) -> char {
-        match piece {
-            Piece::K(true) => 'K',
-            Piece::Q(true) => 'Q',
-            Piece::B(true) => 'B',
-            Piece::N(true) => 'N',
-            Piece::R(true) => 'R',
-            Piece::P(true) => 'P',
-            Piece::K(false) => 'k',
-            Piece::Q(false) => 'q',
-            Piece::B(false) => 'b',
-            Piece::N(false) => 'n',
-            Piece::R(false) => 'r',
-            Piece::P(false) => 'p',
+        let ch = match piece.0 {
+            PieceType::K => 'k',
+            PieceType::Q => 'q',
+            PieceType::B => 'b',
+            PieceType::N => 'n',
+            PieceType::R => 'r',
+            PieceType::P => 'p',
+        };
+        if piece.1 {
+            ch.to_ascii_uppercase()
+        } else {
+            ch
         }
     }
 }
+
+#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+enum PieceType {
+    K,
+    Q,
+    B,
+    N,
+    R,
+    P,
+}
+
+/// The structure for a chess move, in the format (<source square>, <destination square>)
+pub struct Move(usize, usize);
 
 #[cfg(test)]
 mod tests {
