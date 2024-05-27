@@ -1,4 +1,3 @@
-//! # rschess
 //! rschess is yet another chess library for Rust, with the aim to be as feature-rich as possible. It is still IN DEVELOPMENT, and NOT FIT FOR USE.
 
 /// The structure for a rschess chessboard
@@ -14,12 +13,12 @@ pub struct Board {
     en_passant_target: Option<usize>,
     /// The number of halfmoves since the last pawn push or capture
     halfmove_clock: usize,
-    /// The number of fullmoves played
+    /// The current fullmove number
     fullmove_number: usize,
 }
 
 impl Board {
-    /// Attempts to construct a `Board` from a standard FEN string, returning an error if the FEN is invalid
+    /// Attempts to construct a `Board` from a standard FEN string, returning an error if the FEN is invalid.
     /// **Shredder-FEN is not supported.**
     pub fn from_fen(fen: &str) -> Result<Self, String> {
         let mut content = [Occupant::Empty; 64];
@@ -190,15 +189,15 @@ impl Board {
             if !(('a'..='h').contains(&file) && ['3', '6'].contains(&rank)) {
                 return err;
             }
-            en_passant_target = Some((rank.to_digit(10).unwrap() as usize - 1) * 8 + (file as usize - 97));
+            en_passant_target = Some(Self::sq_to_idx(file, rank));
         }
         let halfmoves = fields[4];
         let halfmove_clock: usize = halfmoves
             .parse()
             .map_err(|_| format!("Invalid FEN: Expected fifth field (halfmove clock) to be a whole number, got '{halfmoves}'"))?;
-        if halfmove_clock > 75 {
+        if halfmove_clock > 150 {
             return Err(format!(
-                "Invalid FEN: Fifth field (halfmove clock) cannot contain a value greater than 75 (the seventy-five-move rule forces a draw when this reaches 75), got {halfmove_clock}"
+                "Invalid FEN: Fifth field (halfmove clock) cannot contain a value greater than 150 (the seventy-five-move rule forces a draw when this reaches 150), got {halfmove_clock}"
             ));
         }
         let fullmoves = fields[5];
@@ -219,10 +218,79 @@ impl Board {
             fullmove_number,
         })
     }
+
+    /// Returns the representation of the board state in standard FEN.
+    pub fn to_fen(&self) -> String {
+        let mut rankstrs = Vec::new();
+        for rank in self.content.chunks(8).rev() {
+            let mut rankstr = String::new();
+            let mut empty = 0;
+            for sq in rank {
+                match sq {
+                    Occupant::Piece(p) => {
+                        if empty > 0 {
+                            rankstr.push(char::from_digit(empty, 10).unwrap());
+                            empty = 0;
+                        }
+                        rankstr.push((*p).into());
+                    }
+                    Occupant::Empty => {
+                        empty += 1;
+                    }
+                }
+            }
+            if empty > 0 {
+                rankstr.push(char::from_digit(empty, 10).unwrap());
+            }
+            rankstrs.push(rankstr);
+        }
+        let board_data = rankstrs.join("/");
+        let active_color = if self.side_to_move { "w".to_owned() } else { "b".to_owned() };
+        let mut castling_availability = String::new();
+        if self.castling_rights[0] {
+            castling_availability.push('K');
+        }
+        if self.castling_rights[1] {
+            castling_availability.push('Q');
+        }
+        if self.castling_rights[2] {
+            castling_availability.push('k');
+        }
+        if self.castling_rights[3] {
+            castling_availability.push('q');
+        }
+        if castling_availability.is_empty() {
+            castling_availability.push('-');
+        }
+        let en_passant_target_square;
+        if let Some(target) = self.en_passant_target {
+            let (f, r) = Self::idx_to_sq(target);
+            en_passant_target_square = [f.to_string(), r.to_string()].join("");
+        } else {
+            en_passant_target_square = "-".to_owned();
+        }
+        [
+            board_data,
+            active_color,
+            castling_availability,
+            en_passant_target_square,
+            self.halfmove_clock.to_string(),
+            self.fullmove_number.to_string(),
+        ]
+        .join(" ")
+    }
+
+    fn sq_to_idx(file: char, rank: char) -> usize {
+        (rank.to_digit(10).unwrap() as usize - 1) * 8 + (file as usize - 97)
+    }
+
+    fn idx_to_sq(idx: usize) -> (char, char) {
+        ((idx % 8 + 97) as u8 as char, char::from_digit((idx / 8 + 1) as u32, 10).unwrap())
+    }
 }
 
 impl Default for Board {
-    /// Constructs a `Board` with the starting position for a chess game
+    /// Constructs a `Board` with the starting position for a chess game.
     fn default() -> Self {
         Self::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap()
     }
@@ -264,6 +332,25 @@ impl TryFrom<char> for Piece {
     }
 }
 
+impl From<Piece> for char {
+    fn from(piece: Piece) -> char {
+        match piece {
+            Piece::K(true) => 'K',
+            Piece::Q(true) => 'Q',
+            Piece::B(true) => 'B',
+            Piece::N(true) => 'N',
+            Piece::R(true) => 'R',
+            Piece::P(true) => 'P',
+            Piece::K(false) => 'k',
+            Piece::Q(false) => 'q',
+            Piece::B(false) => 'b',
+            Piece::N(false) => 'n',
+            Piece::R(false) => 'r',
+            Piece::P(false) => 'p',
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Board;
@@ -297,9 +384,26 @@ mod tests {
         Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq c5 0 1").unwrap();
         Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq brr 0 1").unwrap();
         Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0.1 1").unwrap();
-        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 76 1").unwrap();
-        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 75 0").unwrap();
-        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 75 bro").unwrap();
+        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 151 1").unwrap();
+        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 150 0").unwrap();
+        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 150 bro").unwrap();
         Board::from_fen("k5rb/8/8/4P3/3p4/8/8/K5BR w KQkq - 0 1").unwrap();
+    }
+
+    #[test]
+    fn idx_sq_conversion() {
+        assert_eq!(Board::sq_to_idx('f', '5'), 37);
+        assert_eq!(Board::idx_to_sq(37), ('f', '5'));
+        assert_eq!(Board::sq_to_idx('g', '2'), 14);
+        assert_eq!(Board::idx_to_sq(14), ('g', '2'));
+        assert_eq!(Board::sq_to_idx('c', '6'), 42);
+        assert_eq!(Board::idx_to_sq(42), ('c', '6'));
+    }
+
+    #[test]
+    fn board_to_fen() {
+        assert_eq!(Board::from_fen("6k1/8/6K1/6P1/8/8/8/8 w - - 0 1").unwrap().to_fen(), "6k1/8/6K1/6P1/8/8/8/8 w - - 0 1");
+        assert_eq!(Board::from_fen("k5rb/8/8/4P3/3p4/8/8/K5BR w Kk - 0 1").unwrap().to_fen(), "k5rb/8/8/4P3/3p4/8/8/K5BR w Kk - 0 1");
+        assert_eq!(Board::default().to_fen(), Board::default().to_fen());
     }
 }
