@@ -19,26 +19,25 @@ pub struct Board {
 }
 
 impl Board {
-    /// Attempts to construct a `Board` from a FEN string, returning an error if the FEN is invalid
+    /// Attempts to construct a `Board` from a standard FEN string, returning an error if the FEN is invalid
+    /// **Shredder-FEN is not supported.**
     pub fn from_fen(fen: &str) -> Result<Self, String> {
         let mut content = [Occupant::Empty; 64];
-        let fields: Vec<_> = fen.split(" ").collect();
+        let fields: Vec<_> = fen.split(' ').collect();
         let nfields = fields.len();
         if nfields != 6 {
-            return Err(format!(
-                "Invalid FEN: expected six space-separated FEN fields, got {nfields}"
-            ));
+            return Err(format!("Invalid FEN: expected six space-separated FEN fields, got {nfields}"));
         }
-        let ranks: Vec<_> = fields[0].split("/").collect();
+        let ranks: Vec<_> = fields[0].split('/').collect();
         let nranks = ranks.len();
         if nranks != 8 {
-            return Err(format!(
-                "Invalid FEN: expected eight ranks of pieces separated by forward-slashes, got {nranks}"
-            ));
+            return Err(format!("Invalid FEN: expected eight ranks of pieces separated by forward-slashes, got {nranks}"));
         }
         let mut wk_seen = false;
+        let mut wk_pos = 0;
         let mut bk_seen = false;
-        let mut ptr = 63;
+        let mut bk_pos = 0;
+        let mut ptr: usize = 63;
         let mut rankn = 8;
         for rank in ranks {
             let mut rank_filled = 0;
@@ -52,33 +51,29 @@ impl Board {
                         return Err(format!("Invalid FEN: {empty_space} is not a valid character for board data, digits must be in the range 1..=8"));
                     }
                     if empty_space > 8 - rank_filled {
-                        return Err(format!("Invalid FEN: rank {rankn} only has 8 squares, {rank_filled} of which is/are occupied. {empty_space} more squares of empty space cannot be accomodated"));
+                        return Err(format!(
+                            "Invalid FEN: rank {rankn} only has 8 squares, {rank_filled} of which is/are occupied. {empty_space} more squares of empty space cannot be accomodated"
+                        ));
                     }
                     rank_filled += empty_space;
-                    if ptr >= empty_space {
-                        ptr -= empty_space;
-                    }
+                    ptr = ptr.saturating_sub(empty_space);
                 } else {
                     content[ptr] = match piece_char.try_into() {
                         Ok(piece) => {
                             match piece {
                                 Piece::K(true) => {
                                     if wk_seen {
-                                        return Err(
-                                            "Invalid FEN: white cannot have more than one king"
-                                                .to_owned(),
-                                        );
+                                        return Err("Invalid FEN: white cannot have more than one king".to_owned());
                                     }
                                     wk_seen = true;
+                                    wk_pos = ptr;
                                 }
                                 Piece::K(false) => {
                                     if bk_seen {
-                                        return Err(
-                                            "Invalid FEN: black cannot have more than one king"
-                                                .to_owned(),
-                                        );
+                                        return Err("Invalid FEN: black cannot have more than one king".to_owned());
                                     }
                                     bk_seen = true;
+                                    bk_pos = ptr;
                                 }
                                 _ => (),
                             }
@@ -87,82 +82,100 @@ impl Board {
                         Err(e) => return Err(format!("Invalid FEN: {e}")),
                     };
                     rank_filled += 1;
-                    if ptr > 0 {
-                        ptr -= 1;
-                    }
+                    ptr = ptr.saturating_sub(1);
                 }
             }
             if rank_filled != 8 {
-                return Err(format!(
-                    "Invalid FEN: rank {rankn} does not have data for 8 squares"
-                ));
+                return Err(format!("Invalid FEN: rank {rankn} does not have data for 8 squares"));
             }
             rankn -= 1;
+        }
+        if !(wk_seen && bk_seen) {
+            return Err("Invalid FEN: a valid chess position must have one white king and one black king".to_owned());
         }
         let turn = fields[1];
         let side_to_move;
         match turn {
             "w" => side_to_move = true,
             "b" => side_to_move = false,
-            _ => {
-                return Err(format!(
-                "Invalid FEN: Expected second field (side to move) to be 'w' or 'b', got '{turn}'"
-            ))
-            }
+            _ => return Err(format!("Invalid FEN: Expected second field (side to move) to be 'w' or 'b', got '{turn}'")),
         }
         let castling = fields[2];
         let len_castling = castling.len();
         if !((1..=4).contains(&len_castling)) {
-            return Err(format!("Invalid FEN: Expected third field (castling rights) to be 1 to 4 characters long, got {len_castling} characters"));
+            return Err(format!(
+                "Invalid FEN: Expected third field (castling rights) to be 1 to 4 characters long, got {len_castling} characters"
+            ));
         }
         let mut castling_rights = [false; 4];
         if castling != "-" {
             for ch in castling.chars() {
                 match ch {
                     'K' => {
-                        if castling_rights[0] == true {
-                            return Err(format!(
-                                "Invalid FEN: Found more than one occurrence of 'K' in third field (castling rights)"
-                            ));
+                        if wk_pos > 6 {
+                            return Err("Invalid FEN: White king must be from a1 to g1 to have kingside castling rights".to_owned());
+                        }
+                        if castling_rights[0] {
+                            return Err("Invalid FEN: Found more than one occurrence of 'K' in third field (castling rights)".to_owned());
                         }
                         castling_rights[0] = true;
                     }
                     'Q' => {
-                        if castling_rights[1] == true {
-                            return Err(format!(
-                                "Invalid FEN: Found more than one occurrence of 'Q' in third field (castling rights)"
-                            ));
+                        if !(1..=7).contains(&wk_pos) {
+                            return Err("Invalid FEN: White king must be from b1 to h1 to have queenside castling rights".to_owned());
+                        }
+                        if castling_rights[1] {
+                            return Err("Invalid FEN: Found more than one occurrence of 'Q' in third field (castling rights)".to_owned());
                         }
                         castling_rights[1] = true;
                     }
                     'k' => {
-                        if castling_rights[2] == true {
-                            return Err(format!(
-                                "Invalid FEN: Found more than one occurrence of 'k' in third field (castling rights)"
-                            ));
+                        if !(56..=62).contains(&bk_pos) {
+                            return Err("Invalid FEN: Black king must be from a8 to g8 to have kingside castling rights".to_owned());
+                        }
+                        if castling_rights[2] {
+                            return Err("Invalid FEN: Found more than one occurrence of 'k' in third field (castling rights)".to_owned());
                         }
                         castling_rights[2] = true;
                     }
                     'q' => {
-                        if castling_rights[3] == true {
-                            return Err(format!(
-                                "Invalid FEN: Found more than one occurrence of 'q' in third field (castling rights)"
-                            ));
+                        if !(57..64).contains(&bk_pos) {
+                            return Err("Invalid FEN: Black king must be from b8 to h8 to have queenside castling rights".to_owned());
+                        }
+                        if castling_rights[3] {
+                            return Err("Invalid FEN: Found more than one occurrence of 'q' in third field (castling rights)".to_owned());
                         }
                         castling_rights[3] = true;
                     }
-                    _ => {
-                        return Err(format!(
-                            "Invalid FEN: Expected third field (castling rights) to contain '-' or a subset of 'KQkq', found '{ch}'"
-                        ))
-                    }
+                    _ => return Err(format!("Invalid FEN: Expected third field (castling rights) to contain '-' or a subset of 'KQkq', found '{ch}'")),
                 }
             }
+        }
+        fn count_rooks<R>(rng: R, color: bool, content: &[Occupant]) -> usize
+        where
+            R: std::ops::RangeBounds<usize> + Iterator<Item = usize>,
+        {
+            let rook = Occupant::Piece(Piece::R(color));
+            rng.fold(0, |acc, sq| if content[sq] == rook { acc + 1 } else { acc })
+        }
+        if castling_rights[0] && count_rooks(wk_pos + 1..=7, true, &content) != 1 {
+            return Err("Invalid FEN: White must have exactly one king's rook to have kingside castling rights".to_owned());
+        }
+        if castling_rights[1] && count_rooks(0..wk_pos, true, &content) != 1 {
+            return Err("Invalid FEN: White must have exactly one queen's rook to have queenside castling rights".to_owned());
+        }
+        if castling_rights[2] && count_rooks(bk_pos + 1..64, false, &content) != 1 {
+            return Err("Invalid FEN: Black must have exactly one king's rook to have kingside castling rights".to_owned());
+        }
+        if castling_rights[3] && count_rooks(56..bk_pos, false, &content) != 1 {
+            return Err("Invalid FEN: Black must have exactly one queen's rook to have queenside castling rights".to_owned());
         }
         let ep = fields[3];
         let len_ep = ep.len();
         if !((1..=2).contains(&len_ep)) {
-            return Err(format!("Invalid FEN: Expected fourth field (en passant target square) to be 1 to 2 characters long, got {len_ep} characters"));
+            return Err(format!(
+                "Invalid FEN: Expected fourth field (en passant target square) to be 1 to 2 characters long, got {len_ep} characters"
+            ));
         }
         let mut en_passant_target = None;
         if ep != "-" {
@@ -173,28 +186,29 @@ impl Board {
                 return err;
             }
             let file = ep.chars().next().unwrap();
-            let rank = ep.chars().skip(1).next().unwrap();
-            if !('a' <= file && file <= 'h' && ['3', '6'].contains(&rank)) {
+            let rank = ep.chars().nth(1).unwrap();
+            if !(('a'..='h').contains(&file) && ['3', '6'].contains(&rank)) {
                 return err;
             }
-            en_passant_target =
-                Some((rank.to_digit(10).unwrap() as usize - 1) * 8 + (file as usize - 97));
+            en_passant_target = Some((rank.to_digit(10).unwrap() as usize - 1) * 8 + (file as usize - 97));
         }
         let halfmoves = fields[4];
-        let halfmove_clock: usize = halfmoves.parse().map_err(|_| {
-            format!(
-                "Invalid FEN: Expected fifth field (halfmove clock) to be a whole number, got '{halfmoves}'"
-            )
-        })?;
+        let halfmove_clock: usize = halfmoves
+            .parse()
+            .map_err(|_| format!("Invalid FEN: Expected fifth field (halfmove clock) to be a whole number, got '{halfmoves}'"))?;
         if halfmove_clock > 75 {
-            return Err(format!("Invalid FEN: Fifth field (halfmove clock) cannot contain a value greater than 75 (the seventy-five-move rule forces a draw when this reaches 75), got {halfmove_clock}"));
+            return Err(format!(
+                "Invalid FEN: Fifth field (halfmove clock) cannot contain a value greater than 75 (the seventy-five-move rule forces a draw when this reaches 75), got {halfmove_clock}"
+            ));
         }
         let fullmoves = fields[5];
-        let fullmove_number: usize = fullmoves.parse().map_err(|_| {
-            format!("Invalid FEN: Expected sixth field (fullmove number) to be a natural number, got '{fullmoves}'")
-        })?;
+        let fullmove_number: usize = fullmoves
+            .parse()
+            .map_err(|_| format!("Invalid FEN: Expected sixth field (fullmove number) to be a natural number, got '{fullmoves}'"))?;
         if fullmove_number < 1 {
-            return Err(format!("Invalid FEN: Sixth field (fullmove number) cannot contain a value less than 1 (it starts at 1 and increments after Black's move), got {fullmove_number}"));
+            return Err(format!(
+                "Invalid FEN: Sixth field (fullmove number) cannot contain a value less than 1 (it starts at 1 and increments after Black's move), got {fullmove_number}"
+            ));
         }
         Ok(Self {
             content,
@@ -235,9 +249,7 @@ impl TryFrom<char> for Piece {
 
     fn try_from(value: char) -> Result<Self, Self::Error> {
         if !value.is_ascii_alphanumeric() {
-            return Err(format!(
-                "Invalid piece character: '{value}' is not ASCII alphanumeric"
-            ));
+            return Err(format!("Invalid piece character: '{value}' is not ASCII alphanumeric"));
         }
         let color = value.is_uppercase();
         Ok((match value.to_ascii_lowercase() {
@@ -247,11 +259,7 @@ impl TryFrom<char> for Piece {
             'n' => Self::N,
             'r' => Self::R,
             'p' => Self::P,
-            _ => {
-                return Err(format!(
-                    "Invalid piece character: '{value}' does not correspond to any chess piece"
-                ))
-            }
+            _ => return Err(format!("Invalid piece character: '{value}' does not correspond to any chess piece")),
         })(color))
     }
 }
@@ -266,27 +274,32 @@ mod tests {
     }
 
     #[test]
+    fn valid_fen() {
+        Board::from_fen("6k1/8/6K1/6P1/8/8/8/8 w - - 0 1").unwrap();
+        Board::from_fen("k5rb/8/8/4P3/3p4/8/8/K5BR w Kk - 0 1").unwrap();
+    }
+
+    #[test]
+    #[should_panic]
     fn invalid_fen() {
-        // Board::from_fen("what").unwrap();
-        // Board::from_fen("blafsd o fs o sdo d").unwrap();
-        // Board::from_fen("rnbkkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
-        // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RKBQKBNR w KQkq - 0 1").unwrap();
-        // Board::from_fen("rnbqkbnr/pppppppp/8p/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
-        // Board::from_fen("rnbqkbnr/pppppxpp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
-        // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP-RNBQKBNR w KQkq - 0 1").unwrap();
-        // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR lol KQkq - 0 1").unwrap();
-        // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b ros - 0 1").unwrap();
-        // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KKqk - 0 1").unwrap();
-        // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq C6 0 1").unwrap();
-        // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq c5 0 1").unwrap();
-        // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq brr 0 1").unwrap();
-        // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0.1 1").unwrap();
-        // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 76 1").unwrap();
-        // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 75 0").unwrap();
-        // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 75 bro").unwrap();
-        println!(
-            "{:?}",
-            Board::from_fen("6k1/8/6K1/6P1/8/8/8/8 w - - 0 1").unwrap()
-        );
+        Board::from_fen("what").unwrap();
+        Board::from_fen("blafsd o fs o sdo d").unwrap();
+        Board::from_fen("rnbkkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
+        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RKBQKBNR w KQkq - 0 1").unwrap();
+        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQQBNR w KQkq - 0 1").unwrap();
+        Board::from_fen("rnbqkbnr/pppppppp/8p/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
+        Board::from_fen("rnbqkbnr/pppppxpp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
+        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP-RNBQKBNR w KQkq - 0 1").unwrap();
+        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR lol KQkq - 0 1").unwrap();
+        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b ros - 0 1").unwrap();
+        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KKqk - 0 1").unwrap();
+        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq C6 0 1").unwrap();
+        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq c5 0 1").unwrap();
+        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq brr 0 1").unwrap();
+        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0.1 1").unwrap();
+        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 76 1").unwrap();
+        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 75 0").unwrap();
+        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 75 bro").unwrap();
+        Board::from_fen("k5rb/8/8/4P3/3p4/8/8/K5BR w KQkq - 0 1").unwrap();
     }
 }

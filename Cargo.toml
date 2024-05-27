@@ -6,6 +6,5 @@ description = "A Rust chess library with the aim to be as feature-rich as possib
 repository = "https://github.com/Python3-8/rschess"
 keywords = ["chess"]
 license = "MIT"
-license-file = "LICENSE"
 
 [dependencies]
