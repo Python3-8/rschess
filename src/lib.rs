@@ -287,6 +287,28 @@ impl Board {
         .join(" ")
     }
 
+    /// Generates the legal moves in the position.
+    pub fn gen_legal_moves(&self) -> Vec<Move> {
+        if self.ongoing {
+            Self::gen_pseudolegal_moves(&self.content, &self.castling_rights, self.en_passant_target, self.side_to_move)
+                .into_iter()
+                .filter(|move_| {
+                    if let Move(src, dest, Some(PieceType::K)) = move_ {
+                        for sq in *src..=*dest {
+                            if Self::controls_square(!self.side_to_move, sq, &self.content) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    }
+                    !Self::king_capture_pseudolegal(&Self::change_content(&self.content, move_), !self.side_to_move)
+                })
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
+
     /// Converts a square name in the format (<file>, <rank>) to a square index.
     fn sq_to_idx(file: char, rank: char) -> usize {
         (rank.to_digit(10).unwrap() as usize - 1) * 8 + (file as usize - 97)
@@ -307,8 +329,6 @@ impl Board {
                 }
                 match piece.0 {
                     PieceType::K => {
-                        let castling_rights_idx_offset = if side { 0 } else { 2 };
-                        let (oo_sq, ooo_sq) = if side { (6, 2) } else { (62, 58) };
                         let mut possible_dests = Vec::new();
                         for axis in [1, 8, 7, 9] {
                             if Self::long_range_can_move(i, axis as isize) {
@@ -325,13 +345,15 @@ impl Board {
                                 _ => true,
                             })
                             .collect();
+                        pseudolegal_moves.extend(possible_dests.into_iter().map(|d| Move(i, d, None)));
+                        let castling_rights_idx_offset = if side { 0 } else { 2 };
+                        let (oo_sq, ooo_sq) = if side { (6, 2) } else { (62, 58) };
                         if castling_rights[castling_rights_idx_offset] && Self::count_pieces(i + 1..=oo_sq, content) == 1 {
-                            possible_dests.push(oo_sq);
+                            pseudolegal_moves.push(Move(i, oo_sq, Some(PieceType::K)));
                         }
                         if castling_rights[castling_rights_idx_offset + 1] && Self::count_pieces(ooo_sq..i, content) == 1 {
-                            possible_dests.push(ooo_sq);
+                            pseudolegal_moves.push(Move(i, ooo_sq, Some(PieceType::K)));
                         }
-                        pseudolegal_moves.extend(possible_dests.into_iter().map(|d| Move(i, d, None)));
                     }
                     PieceType::N => {
                         let b_r_axes = [(7, [-1, 8]), (9, [8, 1]), (-7, [1, -8]), (-9, [-8, -1])];
@@ -362,63 +384,63 @@ impl Board {
                         let mut possible_dests = Vec::new();
                         if side {
                             if let Occupant::Empty = content[i + 8] {
-                                possible_dests.push(i + 8);
+                                possible_dests.push((i + 8, false));
                                 if (8..16).contains(&i) && content[i + 16] == Occupant::Empty {
-                                    possible_dests.push(i + 16)
+                                    possible_dests.push((i + 16, false))
                                 }
                             }
                             if Self::long_range_can_move(i, 7) {
                                 if let Occupant::Piece(Piece(_, color)) = content[i + 7] {
                                     if !color {
-                                        possible_dests.push(i + 7);
+                                        possible_dests.push((i + 7, false));
                                     }
                                 } else if ep_target.is_some() && ep_target.unwrap() == i + 7 {
-                                    possible_dests.push(i + 7);
+                                    possible_dests.push((i + 7, true));
                                 }
                             }
                             if Self::long_range_can_move(i, 9) {
                                 if let Occupant::Piece(Piece(_, color)) = content[i + 9] {
                                     if !color {
-                                        possible_dests.push(i + 9);
+                                        possible_dests.push((i + 9, false));
                                     }
                                 } else if ep_target.is_some() && ep_target.unwrap() == i + 9 {
-                                    possible_dests.push(i + 9);
+                                    possible_dests.push((i + 9, true));
                                 }
                             }
                         } else {
                             if let Occupant::Empty = content[i - 8] {
-                                possible_dests.push(i - 8);
+                                possible_dests.push((i - 8, false));
                                 if (48..56).contains(&i) && content[i - 16] == Occupant::Empty {
-                                    possible_dests.push(i - 16)
+                                    possible_dests.push((i - 16, false))
                                 }
                             }
                             if Self::long_range_can_move(i, -9) {
                                 if let Occupant::Piece(Piece(_, color)) = content[i - 9] {
                                     if color {
-                                        possible_dests.push(i - 9);
+                                        possible_dests.push((i - 9, false));
                                     }
                                 } else if ep_target.is_some() && ep_target.unwrap() == i - 9 {
-                                    possible_dests.push(i - 9);
+                                    possible_dests.push((i - 9, true));
                                 }
                             }
                             if Self::long_range_can_move(i, -7) {
                                 if let Occupant::Piece(Piece(_, color)) = content[i - 7] {
                                     if color {
-                                        possible_dests.push(i - 7);
+                                        possible_dests.push((i - 7, false));
                                     }
                                 } else if ep_target.is_some() && ep_target.unwrap() == i - 7 {
-                                    possible_dests.push(i - 7);
+                                    possible_dests.push((i - 7, true));
                                 }
                             }
                         }
                         pseudolegal_moves.extend(
                             possible_dests
                                 .into_iter()
-                                .map(|dest| {
+                                .map(|(dest, ep)| {
                                     if (0..8).contains(&dest) || (56..64).contains(&dest) {
                                         [PieceType::Q, PieceType::R, PieceType::B, PieceType::N].into_iter().map(|p| Move(i, dest, Some(p))).collect()
                                     } else {
-                                        vec![Move(i, dest, None)]
+                                        vec![Move(i, dest, if ep { Some(PieceType::P) } else { None })]
                                     }
                                 })
                                 .flatten(),
@@ -483,8 +505,7 @@ impl Board {
     where
         R: RangeBounds<usize> + Iterator<Item = usize>,
     {
-        let piece = Occupant::Piece(piece);
-        rng.fold(0, |acc, sq| if content[sq] == piece { acc + 1 } else { acc })
+        Self::find_pieces(piece, rng, content).len()
     }
 
     /// Counts the number of pieces on the board that are within the provided square range.
@@ -493,6 +514,15 @@ impl Board {
         R: RangeBounds<usize> + Iterator<Item = usize>,
     {
         rng.fold(0, |acc, sq| if let Occupant::Piece(_) = content[sq] { acc + 1 } else { acc })
+    }
+
+    /// Finds the indices of all occurrences of a piece identical to the given `piece` on the board in the square range `rng`.
+    fn find_pieces<R>(piece: Piece, rng: R, content: &[Occupant; 64]) -> Vec<usize>
+    where
+        R: RangeBounds<usize> + Iterator<Item = usize>,
+    {
+        let piece = Occupant::Piece(piece);
+        rng.filter(|&sq| content[sq] == piece).collect()
     }
 
     /// Checks whether capturing a king is pseudolegal for the specified side in the given position.
@@ -521,6 +551,50 @@ impl Board {
         Self::gen_pseudolegal_moves(content, &[false, false, false, false], None, side)
             .into_iter()
             .any(|Move(_, dest, _)| dest == sq)
+    }
+
+    /// Changes the board content based on the given move.
+    fn change_content(content: &[Occupant; 64], move_: &Move) -> [Occupant; 64] {
+        let mut content = content.clone();
+        let Move(src, dest, spec) = move_;
+        (content[*src], content[*dest]) = (Occupant::Empty, content[*src]);
+        match spec {
+            Some(PieceType::K) => match *dest {
+                6 => {
+                    let rook = Piece(PieceType::R, true);
+                    let krook = Self::find_pieces(rook, src + 1..=6, &content)[0];
+                    (content[krook], content[5]) = (Occupant::Empty, content[krook]);
+                }
+                2 => {
+                    let rook = Piece(PieceType::R, true);
+                    let qrook = Self::find_pieces(rook, 0..*src, &content)[0];
+                    (content[qrook], content[3]) = (Occupant::Empty, content[qrook]);
+                }
+                62 => {
+                    let rook = Piece(PieceType::R, false);
+                    let krook = Self::find_pieces(rook, src + 1..=62, &content)[0];
+                    (content[krook], content[61]) = (Occupant::Empty, content[krook]);
+                }
+                58 => {
+                    let rook = Piece(PieceType::R, false);
+                    let qrook = Self::find_pieces(rook, 56..*src, &content)[0];
+                    (content[qrook], content[59]) = (Occupant::Empty, content[qrook]);
+                }
+                _ => panic!("the universe is malfunctioning"),
+            },
+            Some(PieceType::P) => match dest {
+                16..=23 => content[dest + 8] = Occupant::Empty,
+                40..=47 => content[dest - 8] = Occupant::Empty,
+                _ => panic!("the universe is malfunctioning"),
+            },
+            Some(piece_type) => {
+                if let Occupant::Piece(Piece(_, color)) = content[*dest] {
+                    content[*dest] = Occupant::Piece(Piece(*piece_type, color));
+                }
+            }
+            _ => (),
+        }
+        content
     }
 }
 
@@ -591,7 +665,7 @@ enum PieceType {
     P,
 }
 
-/// The structure for a chess move, in the format (<source square>, <destination square>, <promotion>)
+/// The structure for a chess move, in the format (<source square>, <destination square>, <castling/promotion/en passant>)
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub struct Move(usize, usize, Option<PieceType>);
 

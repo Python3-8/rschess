@@ -98,7 +98,7 @@ fn pseudolegal_moves() {
     let board = Board::from_fen("1k6/8/1K6/2Pp4/8/8/8/8 w - d6 0 2").unwrap();
     let legal = [
         Move(34, 42, None),
-        Move(34, 43, None),
+        Move(34, 43, Some(PieceType::P)),
         Move(41, 42, None),
         Move(41, 40, None),
         Move(41, 49, None),
@@ -147,6 +147,86 @@ fn pseudolegal_moves() {
         Move(40, 32, None),
         Move(40, 33, None),
         Move(40, 49, None),
+    ];
+    check(board, &legal);
+}
+
+#[test]
+fn legal_moves() {
+    let check = |board: Board, legal: &[Move]| {
+        let moves = board.gen_legal_moves();
+        assert_eq!(moves, legal);
+    };
+    let board = Board::default();
+    let legal = [
+        Move(1, 16, None),
+        Move(1, 18, None),
+        Move(6, 21, None),
+        Move(6, 23, None),
+        Move(8, 16, None),
+        Move(8, 24, None),
+        Move(9, 17, None),
+        Move(9, 25, None),
+        Move(10, 18, None),
+        Move(10, 26, None),
+        Move(11, 19, None),
+        Move(11, 27, None),
+        Move(12, 20, None),
+        Move(12, 28, None),
+        Move(13, 21, None),
+        Move(13, 29, None),
+        Move(14, 22, None),
+        Move(14, 30, None),
+        Move(15, 23, None),
+        Move(15, 31, None),
+    ];
+    check(board, &legal);
+    let board = Board::from_fen("1k6/3p4/1K6/2P5/8/8/8/8 b - - 0 1").unwrap();
+    let legal = [Move(51, 43, None), Move(51, 35, None), Move(57, 58, None), Move(57, 56, None)];
+    check(board, &legal);
+    let board = Board::from_fen("1k6/8/1K6/2Pp4/8/8/8/8 w - d6 0 2").unwrap();
+    let legal = [
+        Move(34, 42, None),
+        Move(34, 43, Some(PieceType::P)),
+        Move(41, 42, None),
+        Move(41, 40, None),
+        Move(41, 33, None),
+        Move(41, 32, None),
+    ];
+    check(board, &legal);
+    let board = Board::from_fen("k7/3N4/K7/8/8/8/8/8 w - - 0 1").unwrap();
+    let legal = [
+        Move(40, 41, None),
+        Move(40, 32, None),
+        Move(40, 33, None),
+        Move(51, 57, None),
+        Move(51, 61, None),
+        Move(51, 45, None),
+        Move(51, 36, None),
+        Move(51, 34, None),
+        Move(51, 41, None),
+    ]; // TODO insufficient material detection
+    check(board, &legal);
+    let board = Board::from_fen("k7/3P4/K7/8/8/8/8/8 w - - 0 1").unwrap();
+    let legal = [
+        Move(40, 41, None),
+        Move(40, 32, None),
+        Move(40, 33, None),
+        Move(51, 59, Some(PieceType::Q)),
+        Move(51, 59, Some(PieceType::R)),
+        Move(51, 59, Some(PieceType::B)),
+        Move(51, 59, Some(PieceType::N)),
+    ];
+    check(board, &legal);
+    let board = Board::from_fen("K7/8/k7/8/8/8/7p/8 b - - 0 1").unwrap();
+    let legal = [
+        Move(15, 7, Some(PieceType::Q)),
+        Move(15, 7, Some(PieceType::R)),
+        Move(15, 7, Some(PieceType::B)),
+        Move(15, 7, Some(PieceType::N)),
+        Move(40, 41, None),
+        Move(40, 32, None),
+        Move(40, 33, None),
     ];
     check(board, &legal);
 }
