@@ -347,7 +347,7 @@ impl Board {
                                 .map(|dest| Move(i, dest)),
                         )
                     }
-                    PieceType::P => todo!(),
+                    PieceType::P => (),
                     long_range_type => pseudolegal_moves.append(&mut Self::gen_long_range_piece_pseudolegal_moves(i, long_range_type, content, side)),
                 }
             }
@@ -493,6 +493,7 @@ enum PieceType {
 }
 
 /// The structure for a chess move, in the format (<source square>, <destination square>)
+#[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub struct Move(usize, usize);
 
 #[cfg(test)]
@@ -549,5 +550,11 @@ mod tests {
         assert_eq!(Board::from_fen("6k1/8/6K1/6P1/8/8/8/8 w - - 0 1").unwrap().to_fen(), "6k1/8/6K1/6P1/8/8/8/8 w - - 0 1");
         assert_eq!(Board::from_fen("k5rb/8/8/4P3/3p4/8/8/K5BR w Kk - 0 1").unwrap().to_fen(), "k5rb/8/8/4P3/3p4/8/8/K5BR w Kk - 0 1");
         assert_eq!(Board::default().to_fen(), Board::default().to_fen());
+    }
+
+    #[test]
+    fn pseudolegal_moves() {
+        let board = Board::default();
+        dbg!(Board::gen_pseudolegal_moves(&board.content, &board.castling_rights, board.en_passant_target, board.side_to_move));
     }
 }
