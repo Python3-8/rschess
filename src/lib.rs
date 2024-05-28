@@ -299,17 +299,13 @@ impl Board {
                         let castling_rights_idx_offset = if side { 0 } else { 2 };
                         let (oo_sq, ooo_sq) = if side { (6, 2) } else { (62, 58) };
                         let mut possible_dests = Vec::new();
-                        if i + 1 % 8 != 0 {
-                            possible_dests.push(i + 1);
-                        }
-                        if i % 8 != 0 {
-                            possible_dests.push(i - 1);
-                        }
-                        if i < 56 {
-                            possible_dests.push(i + 8);
-                        }
-                        if i > 7 {
-                            possible_dests.push(i - 8);
+                        for axis in [1, 8, 7, 9] {
+                            if Self::long_range_can_move(i, axis as isize) {
+                                possible_dests.push(i + axis);
+                            }
+                            if Self::long_range_can_move(i, -(axis as isize)) {
+                                possible_dests.push(i - axis);
+                            }
                         }
                         possible_dests = possible_dests
                             .into_iter()
@@ -326,15 +322,60 @@ impl Board {
                         }
                         pseudolegal_moves.extend(possible_dests.into_iter().map(|d| Move(i, d)));
                     }
-                    PieceType::Q => todo!(),
-                    PieceType::B => todo!(),
                     PieceType::N => todo!(),
-                    PieceType::R => todo!(),
                     PieceType::P => todo!(),
+                    long_range_type => pseudolegal_moves.append(&mut Self::gen_long_range_piece_pseudolegal_moves(i, long_range_type, content, side)),
                 }
             }
         }
         pseudolegal_moves
+    }
+
+    /// Generates pseudolegal moves for a long-range piece.
+    fn gen_long_range_piece_pseudolegal_moves(sq: usize, piece_type: PieceType, content: &[Occupant; 64], side: bool) -> Vec<Move> {
+        let axes = match piece_type {
+            PieceType::Q => vec![1, 8, 7, 9],
+            PieceType::R => vec![1, 8],
+            PieceType::B => vec![7, 9],
+            _ => panic!("not a long-range piece"),
+        };
+        let mut dest_squares = Vec::new();
+        for axis in axes {
+            'axis: for axis_direction in [-axis, axis] {
+                let mut current_sq = sq as isize;
+                while Self::long_range_can_move(current_sq as usize, axis_direction) {
+                    let mut skip = false;
+                    match content[current_sq as usize] {
+                        Occupant::Piece(Piece(_, color)) => {
+                            if color == side {
+                                continue 'axis;
+                            } else {
+                                skip = true;
+                            }
+                        }
+                        _ => (),
+                    }
+                    current_sq += axis_direction;
+                    dest_squares.push(current_sq as usize);
+                    if skip {
+                        continue 'axis;
+                    }
+                }
+            }
+        }
+        dest_squares.into_iter().map(|dest| Move(sq, dest)).collect()
+    }
+
+    /// Checks whether a long-range piece can move on the axis `axis_direction` from the square `sq`
+    fn long_range_can_move(sq: usize, axis_direction: isize) -> bool {
+        !(axis_direction == 1 && (sq + 1) % 8 == 0
+            || axis_direction == -1 && sq % 8 == 0
+            || axis_direction == 8 && sq >= 56
+            || axis_direction == -8 && sq < 8
+            || axis_direction == 7 && (sq >= 56 || sq % 8 == 0)
+            || axis_direction == -7 && (sq < 8 || sq + 1 % 8 == 0)
+            || axis_direction == 9 && (sq >= 56 || sq + 1 % 8 == 0)
+            || axis_direction == -9 && (sq < 8 || sq % 8 == 0))
     }
 
     /// Counts the number of pieces on the board identical to the `piece` provided that are within the provided square range.
