@@ -76,6 +76,11 @@ impl Board {
                                     bk_seen = true;
                                     bk_pos = ptr;
                                 }
+                                Piece(PieceType::P, _) => {
+                                    if !(8..56).contains(&ptr) {
+                                        return Err("Invalid FEN: there cannot be pawns on the 1st and 8th ranks".to_owned());
+                                    }
+                                }
                                 _ => (),
                             }
                             Occupant::Piece(piece)
@@ -140,7 +145,7 @@ impl Board {
                         castling_rights[2] = true;
                     }
                     'q' => {
-                        if !(57..64).contains(&bk_pos) {
+                        if !(57..=63).contains(&bk_pos) {
                             return Err("Invalid FEN: Black king must be from b8 to h8 to have queenside castling rights".to_owned());
                         }
                         if castling_rights[3] {
@@ -320,10 +325,10 @@ impl Board {
                         if castling_rights[castling_rights_idx_offset + 1] && Self::count_pieces(ooo_sq..i, content) == 1 {
                             possible_dests.push(ooo_sq);
                         }
-                        pseudolegal_moves.extend(possible_dests.into_iter().map(|d| Move(i, d)));
+                        pseudolegal_moves.extend(possible_dests.into_iter().map(|d| Move(i, d, None)));
                     }
                     PieceType::N => {
-                        let b_r_axes = [(7, [-1, 8]), (9, [8, 1]), (-9, [1, -8]), (-7, [-8, -1])];
+                        let b_r_axes = [(7, [-1, 8]), (9, [8, 1]), (-7, [1, -8]), (-9, [-8, -1])];
                         let mut dest_squares = Vec::new();
                         for (b_axis, r_axes) in b_r_axes {
                             if !Self::long_range_can_move(i, b_axis) {
@@ -344,10 +349,75 @@ impl Board {
                                     Occupant::Piece(Piece(_, color)) => color != side,
                                     _ => true,
                                 })
-                                .map(|dest| Move(i, dest)),
+                                .map(|dest| Move(i, dest, None)),
                         )
                     }
-                    PieceType::P => (),
+                    PieceType::P => {
+                        let mut possible_dests = Vec::new();
+                        if side {
+                            if let Occupant::Empty = content[i + 8] {
+                                possible_dests.push(i + 8);
+                                if (8..16).contains(&i) && content[i + 16] == Occupant::Empty {
+                                    possible_dests.push(i + 16)
+                                }
+                            }
+                            if Self::long_range_can_move(i, 7) {
+                                if let Occupant::Piece(Piece(_, color)) = content[i + 7] {
+                                    if !color {
+                                        possible_dests.push(i + 7);
+                                    }
+                                } else if ep_target.is_some() && ep_target.unwrap() == i + 7 {
+                                    possible_dests.push(i + 7);
+                                }
+                            }
+                            if Self::long_range_can_move(i, 9) {
+                                if let Occupant::Piece(Piece(_, color)) = content[i + 9] {
+                                    if !color {
+                                        possible_dests.push(i + 9);
+                                    }
+                                } else if ep_target.is_some() && ep_target.unwrap() == i + 9 {
+                                    possible_dests.push(i + 9);
+                                }
+                            }
+                        } else {
+                            if let Occupant::Empty = content[i - 8] {
+                                possible_dests.push(i - 8);
+                                if (48..56).contains(&i) && content[i - 16] == Occupant::Empty {
+                                    possible_dests.push(i - 16)
+                                }
+                            }
+                            if Self::long_range_can_move(i, -9) {
+                                if let Occupant::Piece(Piece(_, color)) = content[i - 9] {
+                                    if color {
+                                        possible_dests.push(i - 9);
+                                    }
+                                } else if ep_target.is_some() && ep_target.unwrap() == i - 9 {
+                                    possible_dests.push(i - 9);
+                                }
+                            }
+                            if Self::long_range_can_move(i, -7) {
+                                if let Occupant::Piece(Piece(_, color)) = content[i - 7] {
+                                    if color {
+                                        possible_dests.push(i - 7);
+                                    }
+                                } else if ep_target.is_some() && ep_target.unwrap() == i - 7 {
+                                    possible_dests.push(i - 7);
+                                }
+                            }
+                        }
+                        pseudolegal_moves.extend(
+                            possible_dests
+                                .into_iter()
+                                .map(|dest| {
+                                    if (0..8).contains(&dest) || (56..64).contains(&dest) {
+                                        [PieceType::Q, PieceType::R, PieceType::B, PieceType::N].into_iter().map(|p| Move(i, dest, Some(p))).collect()
+                                    } else {
+                                        vec![Move(i, dest, None)]
+                                    }
+                                })
+                                .flatten(),
+                        );
+                    }
                     long_range_type => pseudolegal_moves.append(&mut Self::gen_long_range_piece_pseudolegal_moves(i, long_range_type, content, side)),
                 }
             }
@@ -387,7 +457,7 @@ impl Board {
                 }
             }
         }
-        dest_squares.into_iter().map(|dest| Move(sq, dest)).collect()
+        dest_squares.into_iter().map(|dest| Move(sq, dest, None)).collect()
     }
 
     /// Checks whether a long-range piece can move on the axis `axis_direction` from the square `sq`
@@ -397,8 +467,8 @@ impl Board {
             || axis_direction == 8 && sq >= 56
             || axis_direction == -8 && sq < 8
             || axis_direction == 7 && (sq >= 56 || sq % 8 == 0)
-            || axis_direction == -7 && (sq < 8 || sq + 1 % 8 == 0)
-            || axis_direction == 9 && (sq >= 56 || sq + 1 % 8 == 0)
+            || axis_direction == -7 && (sq < 8 || (sq + 1) % 8 == 0)
+            || axis_direction == 9 && (sq >= 56 || (sq + 1) % 8 == 0)
             || axis_direction == -9 && (sq < 8 || sq % 8 == 0))
     }
 
@@ -492,69 +562,9 @@ enum PieceType {
     P,
 }
 
-/// The structure for a chess move, in the format (<source square>, <destination square>)
+/// The structure for a chess move, in the format (<source square>, <destination square>, <promotion>)
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-pub struct Move(usize, usize);
+pub struct Move(usize, usize, Option<PieceType>);
 
 #[cfg(test)]
-mod tests {
-    use super::Board;
-
-    #[test]
-    fn default_board() {
-        println!("{:?}", Board::default());
-    }
-
-    #[test]
-    fn valid_fen() {
-        Board::from_fen("6k1/8/6K1/6P1/8/8/8/8 w - - 0 1").unwrap();
-        Board::from_fen("k5rb/8/8/4P3/3p4/8/8/K5BR w Kk - 0 1").unwrap();
-    }
-
-    #[test]
-    #[should_panic]
-    fn invalid_fen() {
-        Board::from_fen("what").unwrap();
-        Board::from_fen("blafsd o fs o sdo d").unwrap();
-        Board::from_fen("rnbkkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
-        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RKBQKBNR w KQkq - 0 1").unwrap();
-        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQQBNR w KQkq - 0 1").unwrap();
-        Board::from_fen("rnbqkbnr/pppppppp/8p/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
-        Board::from_fen("rnbqkbnr/pppppxpp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
-        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP-RNBQKBNR w KQkq - 0 1").unwrap();
-        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR lol KQkq - 0 1").unwrap();
-        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b ros - 0 1").unwrap();
-        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KKqk - 0 1").unwrap();
-        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq C6 0 1").unwrap();
-        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq c5 0 1").unwrap();
-        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq brr 0 1").unwrap();
-        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0.1 1").unwrap();
-        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 151 1").unwrap();
-        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 150 0").unwrap();
-        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 150 bro").unwrap();
-        Board::from_fen("k5rb/8/8/4P3/3p4/8/8/K5BR w KQkq - 0 1").unwrap();
-    }
-
-    #[test]
-    fn idx_sq_conversion() {
-        assert_eq!(Board::sq_to_idx('f', '5'), 37);
-        assert_eq!(Board::idx_to_sq(37), ('f', '5'));
-        assert_eq!(Board::sq_to_idx('g', '2'), 14);
-        assert_eq!(Board::idx_to_sq(14), ('g', '2'));
-        assert_eq!(Board::sq_to_idx('c', '6'), 42);
-        assert_eq!(Board::idx_to_sq(42), ('c', '6'));
-    }
-
-    #[test]
-    fn board_to_fen() {
-        assert_eq!(Board::from_fen("6k1/8/6K1/6P1/8/8/8/8 w - - 0 1").unwrap().to_fen(), "6k1/8/6K1/6P1/8/8/8/8 w - - 0 1");
-        assert_eq!(Board::from_fen("k5rb/8/8/4P3/3p4/8/8/K5BR w Kk - 0 1").unwrap().to_fen(), "k5rb/8/8/4P3/3p4/8/8/K5BR w Kk - 0 1");
-        assert_eq!(Board::default().to_fen(), Board::default().to_fen());
-    }
-
-    #[test]
-    fn pseudolegal_moves() {
-        let board = Board::default();
-        dbg!(Board::gen_pseudolegal_moves(&board.content, &board.castling_rights, board.en_passant_target, board.side_to_move));
-    }
-}
+mod test;
