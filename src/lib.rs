@@ -1,5 +1,7 @@
 //! rschess is yet another chess library for Rust, with the aim to be as feature-rich as possible. It is still IN DEVELOPMENT, and NOT FIT FOR USE.
 
+use std::ops::RangeBounds;
+
 /// The structure for a rschess chessboard
 #[derive(Debug)]
 pub struct Board {
@@ -150,23 +152,17 @@ impl Board {
                 }
             }
         }
-        fn count_rooks<R>(rng: R, color: bool, content: &[Occupant]) -> usize
-        where
-            R: std::ops::RangeBounds<usize> + Iterator<Item = usize>,
-        {
-            let rook = Occupant::Piece(Piece(PieceType::R, color));
-            rng.fold(0, |acc, sq| if content[sq] == rook { acc + 1 } else { acc })
-        }
-        if castling_rights[0] && count_rooks(wk_pos + 1..=7, true, &content) != 1 {
+        let count_rooks = |rng, color| Self::count_piece(rng, Piece(PieceType::R, color), &content);
+        if castling_rights[0] && count_rooks(wk_pos + 1..8, true) != 1 {
             return Err("Invalid FEN: White must have exactly one king's rook to have kingside castling rights".to_owned());
         }
-        if castling_rights[1] && count_rooks(0..wk_pos, true, &content) != 1 {
+        if castling_rights[1] && count_rooks(0..wk_pos, true) != 1 {
             return Err("Invalid FEN: White must have exactly one queen's rook to have queenside castling rights".to_owned());
         }
-        if castling_rights[2] && count_rooks(bk_pos + 1..64, false, &content) != 1 {
+        if castling_rights[2] && count_rooks(bk_pos + 1..64, false) != 1 {
             return Err("Invalid FEN: Black must have exactly one king's rook to have kingside castling rights".to_owned());
         }
-        if castling_rights[3] && count_rooks(56..bk_pos, false, &content) != 1 {
+        if castling_rights[3] && count_rooks(56..bk_pos, false) != 1 {
             return Err("Invalid FEN: Black must have exactly one queen's rook to have queenside castling rights".to_owned());
         }
         let ep = fields[3];
@@ -280,17 +276,19 @@ impl Board {
         .join(" ")
     }
 
+    /// Converts a square name in the format (<file>, <rank>) to a square index.
     fn sq_to_idx(file: char, rank: char) -> usize {
         (rank.to_digit(10).unwrap() as usize - 1) * 8 + (file as usize - 97)
     }
 
+    /// Converts a square index to a square name in the format (<file>, <rank>).
     fn idx_to_sq(idx: usize) -> (char, char) {
         ((idx % 8 + 97) as u8 as char, char::from_digit((idx / 8 + 1) as u32, 10).unwrap())
     }
 
     /// Generates pseudolegal moves based on the board data, castling rights, available en passant target, and the side to move.
     fn gen_pseudolegal_moves(content: &[Occupant; 64], castling_rights: &[bool; 4], ep_target: Option<usize>, side: bool) -> Vec<Move> {
-        let castling_idx_offset = if side { 0 } else { 2 };
+        let mut pseudolegal_moves = Vec::new();
         for (i, sq) in content.into_iter().enumerate() {
             if let Occupant::Piece(piece) = sq {
                 if piece.1 != side {
@@ -298,6 +296,8 @@ impl Board {
                 }
                 match piece.0 {
                     PieceType::K => {
+                        let castling_rights_idx_offset = if side { 0 } else { 2 };
+                        let (oo_sq, ooo_sq) = if side { (6, 2) } else { (62, 58) };
                         let mut possible_dests = Vec::new();
                         if i + 1 % 8 != 0 {
                             possible_dests.push(i + 1);
@@ -311,14 +311,6 @@ impl Board {
                         if i > 7 {
                             possible_dests.push(i - 8);
                         }
-                        if !Self::king_capture_possible(content) {
-                            if castling_rights[castling_idx_offset] {
-                                todo!()
-                            }
-                            if castling_rights[castling_idx_offset + 1] {
-                                todo!()
-                            }
-                        }
                         possible_dests = possible_dests
                             .into_iter()
                             .filter(|&dest| match content[dest] {
@@ -326,6 +318,13 @@ impl Board {
                                 _ => true,
                             })
                             .collect();
+                        if castling_rights[castling_rights_idx_offset] && Self::count_pieces(i + 1..=oo_sq, content) == 1 {
+                            possible_dests.push(oo_sq);
+                        }
+                        if castling_rights[castling_rights_idx_offset + 1] && Self::count_pieces(ooo_sq..i, content) == 1 {
+                            possible_dests.push(ooo_sq);
+                        }
+                        pseudolegal_moves.extend(possible_dests.into_iter().map(|d| Move(i, d)));
                     }
                     PieceType::Q => todo!(),
                     PieceType::B => todo!(),
@@ -335,10 +334,28 @@ impl Board {
                 }
             }
         }
-        todo!()
+        pseudolegal_moves
     }
 
-    fn king_capture_possible(content: &[Occupant; 64]) -> bool {
+    /// Counts the number of pieces on the board identical to the `piece` provided that are within the provided square range.
+    fn count_piece<R>(rng: R, piece: Piece, content: &[Occupant; 64]) -> usize
+    where
+        R: RangeBounds<usize> + Iterator<Item = usize>,
+    {
+        let piece = Occupant::Piece(piece);
+        rng.fold(0, |acc, sq| if content[sq] == piece { acc + 1 } else { acc })
+    }
+
+    /// Counts the number of pieces on the board that are within the provided square range.
+    fn count_pieces<R>(rng: R, content: &[Occupant; 64]) -> usize
+    where
+        R: RangeBounds<usize> + Iterator<Item = usize>,
+    {
+        rng.fold(0, |acc, sq| if let Occupant::Piece(_) = content[sq] { acc + 1 } else { acc })
+    }
+
+    /// Checks whether capturing a king is pseudolegal for the specified side in the given position.
+    fn king_capture_pseudolegal(content: &[Occupant; 64], side: bool) -> bool {
         todo!()
     }
 }
