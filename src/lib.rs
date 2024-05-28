@@ -310,7 +310,7 @@ impl Board {
                         possible_dests = possible_dests
                             .into_iter()
                             .filter(|&dest| match content[dest] {
-                                Occupant::Piece(p) => p.1 != side,
+                                Occupant::Piece(Piece(_, color)) => color != side,
                                 _ => true,
                             })
                             .collect();
@@ -322,7 +322,31 @@ impl Board {
                         }
                         pseudolegal_moves.extend(possible_dests.into_iter().map(|d| Move(i, d)));
                     }
-                    PieceType::N => todo!(),
+                    PieceType::N => {
+                        let b_r_axes = [(7, [-1, 8]), (9, [8, 1]), (-9, [1, -8]), (-7, [-8, -1])];
+                        let mut dest_squares = Vec::new();
+                        for (b_axis, r_axes) in b_r_axes {
+                            if !Self::long_range_can_move(i, b_axis) {
+                                continue;
+                            }
+                            let b_dest = i as isize + b_axis;
+                            for r_axis in r_axes {
+                                if !Self::long_range_can_move(b_dest as usize, r_axis) {
+                                    continue;
+                                }
+                                dest_squares.push((b_dest + r_axis) as usize);
+                            }
+                        }
+                        pseudolegal_moves.extend(
+                            dest_squares
+                                .into_iter()
+                                .filter(|&dest| match content[dest] {
+                                    Occupant::Piece(Piece(_, color)) => color != side,
+                                    _ => true,
+                                })
+                                .map(|dest| Move(i, dest)),
+                        )
+                    }
                     PieceType::P => todo!(),
                     long_range_type => pseudolegal_moves.append(&mut Self::gen_long_range_piece_pseudolegal_moves(i, long_range_type, content, side)),
                 }
