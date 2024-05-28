@@ -33,7 +33,8 @@ fn invalid_fen() {
     // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 150 0").unwrap();
     // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 150 bro").unwrap();
     // Board::from_fen("k5rb/8/8/4P3/3p4/8/8/K5BR w KQkq - 0 1").unwrap();
-    Board::from_fen("6k1/8/6K1/6P1/8/8/8/6p1 w - - 0 1").unwrap();
+    // Board::from_fen("6k1/8/6K1/6P1/8/8/8/6p1 w - - 0 1").unwrap();
+    Board::from_fen("8/8/4k3/8/2K2N2/8/8/8 w - - 0 1").unwrap();
 }
 
 #[test]

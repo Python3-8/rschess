@@ -17,6 +17,8 @@ pub struct Board {
     halfmove_clock: usize,
     /// The current fullmove number
     fullmove_number: usize,
+    /// Whether or not the game is still in progress
+    ongoing: bool,
 }
 
 impl Board {
@@ -105,6 +107,9 @@ impl Board {
             "w" => side_to_move = true,
             "b" => side_to_move = false,
             _ => return Err(format!("Invalid FEN: Expected second field (side to move) to be 'w' or 'b', got '{turn}'")),
+        }
+        if Self::king_capture_pseudolegal(&content, side_to_move) {
+            return Err("Invalid FEN: When one side is in check, it cannot be the other side's turn to move".to_owned());
         }
         let castling = fields[2];
         let len_castling = castling.len();
@@ -217,6 +222,7 @@ impl Board {
             en_passant_target,
             halfmove_clock,
             fullmove_number,
+            ongoing: halfmove_clock < 150,
         })
     }
 
@@ -491,7 +497,30 @@ impl Board {
 
     /// Checks whether capturing a king is pseudolegal for the specified side in the given position.
     fn king_capture_pseudolegal(content: &[Occupant; 64], side: bool) -> bool {
-        todo!()
+        let enemy_king = content
+            .into_iter()
+            .enumerate()
+            .find(|(_, o)| {
+                if let Occupant::Piece(Piece(PieceType::K, s)) = o {
+                    if *s != side {
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            })
+            .unwrap()
+            .0;
+        Self::controls_square(side, enemy_king, content)
+    }
+
+    /// Checks whether the given side controls a specified square in the given position.
+    fn controls_square(side: bool, sq: usize, content: &[Occupant; 64]) -> bool {
+        Self::gen_pseudolegal_moves(content, &[false, false, false, false], None, side)
+            .into_iter()
+            .any(|Move(_, dest, _)| dest == sq)
     }
 }
 
