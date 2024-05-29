@@ -1,3 +1,4 @@
+use super::helpers;
 use super::{Board, Move, PieceType};
 
 #[test]
@@ -39,12 +40,12 @@ fn invalid_fen() {
 
 #[test]
 fn idx_sq_conversion() {
-    assert_eq!(Board::sq_to_idx('f', '5'), 37);
-    assert_eq!(Board::idx_to_sq(37), ('f', '5'));
-    assert_eq!(Board::sq_to_idx('g', '2'), 14);
-    assert_eq!(Board::idx_to_sq(14), ('g', '2'));
-    assert_eq!(Board::sq_to_idx('c', '6'), 42);
-    assert_eq!(Board::idx_to_sq(42), ('c', '6'));
+    assert_eq!(helpers::sq_to_idx('f', '5'), 37);
+    assert_eq!(helpers::idx_to_sq(37), ('f', '5'));
+    assert_eq!(helpers::sq_to_idx('g', '2'), 14);
+    assert_eq!(helpers::idx_to_sq(14), ('g', '2'));
+    assert_eq!(helpers::sq_to_idx('c', '6'), 42);
+    assert_eq!(helpers::idx_to_sq(42), ('c', '6'));
 }
 
 #[test]
@@ -57,7 +58,7 @@ fn board_to_fen() {
 #[test]
 fn pseudolegal_moves() {
     let check = |board: Board, legal: &[Move]| {
-        let moves = Board::gen_pseudolegal_moves(&board.content, &board.castling_rights, board.en_passant_target, board.side_to_move);
+        let moves = board.position.gen_pseudolegal_moves();
         assert_eq!(moves, legal);
     };
     let board = Board::default();
