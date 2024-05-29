@@ -51,10 +51,10 @@ impl Position {
                         pseudolegal_moves.extend(possible_dests.into_iter().map(|d| Move(i, d, None)));
                         let castling_rights_idx_offset = if *side { 0 } else { 2 };
                         let (oo_sq, ooo_sq) = if *side { (6, 2) } else { (62, 58) };
-                        if castling_rights[castling_rights_idx_offset] && helpers::count_pieces(i + 1..=oo_sq, content) == 1 {
+                        if castling_rights[castling_rights_idx_offset] && helpers::count_pieces(i + 1..=oo_sq, content) <= 1 {
                             pseudolegal_moves.push(Move(i, oo_sq, Some(PieceType::K)));
                         }
-                        if castling_rights[castling_rights_idx_offset + 1] && helpers::count_pieces(ooo_sq..i, content) == 1 {
+                        if castling_rights[castling_rights_idx_offset + 1] && helpers::count_pieces(ooo_sq..i, content) <= 1 {
                             pseudolegal_moves.push(Move(i, ooo_sq, Some(PieceType::K)));
                         }
                     }
@@ -171,6 +171,7 @@ impl Position {
                 let mut current_sq = sq as isize;
                 while helpers::long_range_can_move(current_sq as usize, axis_direction) {
                     let mut skip = false;
+                    current_sq += axis_direction;
                     match content[current_sq as usize] {
                         Occupant::Piece(Piece(_, color)) => {
                             if color == *side {
@@ -181,7 +182,6 @@ impl Position {
                         }
                         _ => (),
                     }
-                    current_sq += axis_direction;
                     dest_squares.push(current_sq as usize);
                     if skip {
                         continue 'axis;
@@ -194,10 +194,13 @@ impl Position {
 
     /// Checks whether the given side controls a specified square in this position.
     pub fn controls_square(&self, sq: usize, side: bool) -> bool {
-        // TODO disallow 1. O-O in 8/8/8/8/8/4k3/4p3/4K2R w K - 0 1
         let Self {
-            content, castling_rights, ep_target, ..
+            mut content,
+            castling_rights,
+            ep_target,
+            ..
         } = self.clone();
+        content[sq] = Occupant::Piece(Piece(PieceType::P, !side));
         Self {
             content,
             side,
@@ -221,6 +224,10 @@ pub struct Board {
     fullmove_number: usize,
     /// Whether or not the game is still in progress
     ongoing: bool,
+    /// The list of positions that have occurred on the board
+    position_history: Vec<Position>,
+    /// The list of moves that have occurred on the board
+    move_history: Vec<Move>,
 }
 
 impl Board {
@@ -399,6 +406,12 @@ impl Board {
             }
             ep_target = Some(helpers::sq_to_idx(file, rank));
         }
+        let position = Position {
+            content,
+            side,
+            castling_rights,
+            ep_target,
+        };
         let halfmoves = fields[4];
         let halfmove_clock: usize = halfmoves
             .parse()
@@ -418,15 +431,12 @@ impl Board {
             ));
         }
         Ok(Self {
-            position: Position {
-                content,
-                side,
-                castling_rights,
-                ep_target,
-            },
+            position: position.clone(),
             halfmove_clock,
             fullmove_number,
             ongoing: halfmove_clock < 150,
+            position_history: vec![position],
+            move_history: Vec::new(),
         })
     }
 
@@ -499,8 +509,8 @@ impl Board {
 
     /// Generates the legal moves in the position.
     pub fn gen_legal_moves(&self) -> Vec<Move> {
-        let Position { content, side, .. } = self.position;
         if self.ongoing {
+            let Position { content, side, .. } = self.position;
             self.position
                 .gen_pseudolegal_moves()
                 .into_iter()
@@ -518,6 +528,109 @@ impl Board {
                 .collect()
         } else {
             Vec::new()
+        }
+    }
+
+    /// Plays on the board the given move, returning an error if the move is illegal.
+    pub fn make_move(&mut self, move_: Move) -> Result<(), ()> {
+        let legal_moves = self.gen_legal_moves();
+        if !legal_moves.contains(&move_) {
+            return Err(());
+        }
+        let castling_rights_idx_offset = if self.position.side { 0 } else { 2 };
+        let side = self.position.side;
+        let mut castling_rights = self.position.castling_rights.clone();
+        let mut ep_target = None;
+        let mut halfmove_clock = self.halfmove_clock;
+        let fullmove_number = self.fullmove_number + if side { 0 } else { 1 };
+        let (move_src, moved_piece) = (move_.0, self.position.content[move_.0]);
+        let (move_dest, dest_occ) = (move_.1, self.position.content[move_.1]);
+        if let Occupant::Piece(Piece(piece_type, _)) = dest_occ {
+            halfmove_clock = 0;
+            if piece_type == PieceType::R {
+                // TODO remove enemy side's appropriate castling rights
+            }
+        } else {
+            halfmove_clock += 1;
+        }
+        match moved_piece {
+            Occupant::Piece(Piece(PieceType::K, _)) => (castling_rights[castling_rights_idx_offset], castling_rights[castling_rights_idx_offset + 1]) = (false, false),
+            Occupant::Piece(Piece(PieceType::P, _)) => {
+                halfmove_clock = 0;
+                if (std::cmp::max(move_src, move_dest) - std::cmp::min(move_src, move_dest)) == 16 {
+                    ep_target = Some(if side { move_src + 8 } else { move_src - 8 });
+                }
+            }
+            Occupant::Piece(Piece(PieceType::R, _)) => {
+                // TODO remove appropriate castling rights
+            }
+            _ => (),
+        }
+        let side = !self.position.side;
+        let new_content = helpers::change_content(&self.position.content, &move_);
+        let new_position = Position {
+            content: new_content,
+            side: !side,
+            castling_rights,
+            ep_target,
+        };
+        self.position_history.push(self.position.clone());
+        self.position = new_position;
+        self.move_history.push(move_);
+        (self.halfmove_clock, self.fullmove_number) = (halfmove_clock, fullmove_number);
+        if self.is_fivefold_repetition() || self.is_seventy_five_move_rule() || self.is_checkmate() {
+            self.ongoing = false;
+        }
+        Ok(())
+    }
+
+    /// Checks whether a threefold repetition of the position has occurred.
+    pub fn is_threefold_repetition(&self) -> bool {
+        self.position_history.iter().fold(0, |acc, pos| if pos == &self.position { acc + 1 } else { acc }) == 3
+    }
+
+    /// Checks whether a fivefold repetition of the position has occurred.
+    pub fn is_fivefold_repetition(&self) -> bool {
+        self.position_history.iter().fold(0, |acc, pos| if pos == &self.position { acc + 1 } else { acc }) == 5
+    }
+
+    /// Checks whether a draw can be claimed by the fifty-move rule.
+    pub fn is_fifty_move_rule(&self) -> bool {
+        self.halfmove_clock == 100
+    }
+
+    /// Checks whether the game is drawn by the seventy-five-move rule.
+    pub fn is_seventy_five_move_rule(&self) -> bool {
+        self.halfmove_clock == 150
+    }
+
+    /// Checks whether any side is in check. Use `Board::checked_side` to know which side is in check.
+    pub fn is_check(&self) -> bool {
+        self.checked_side().is_some()
+    }
+
+    /// Checks whether any side is in checkmate. Use `Board::checkmated_side` to know which side is in checkmate.
+    pub fn is_checkmate(&self) -> bool {
+        self.is_check() && self.gen_legal_moves().is_empty()
+    }
+
+    /// Returns an optional boolean representing the side in check (`None` if neither side is in check).
+    pub fn checked_side(&self) -> Option<bool> {
+        if helpers::king_capture_pseudolegal(&self.position.content, false) {
+            Some(true)
+        } else if helpers::king_capture_pseudolegal(&self.position.content, true) {
+            Some(false)
+        } else {
+            None
+        }
+    }
+
+    /// Returns an optional boolean representing the side in checkmate (`None` if neither side is in checkmate).
+    pub fn checkmated_side(&self) -> Option<bool> {
+        if self.is_checkmate() {
+            Some(self.position.side)
+        } else {
+            None
         }
     }
 }

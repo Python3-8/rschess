@@ -50,22 +50,7 @@ where
 
 /// Checks whether capturing a king is pseudolegal for the specified side in the given position.
 pub fn king_capture_pseudolegal(content: &[Occupant; 64], side: bool) -> bool {
-    let enemy_king = content
-        .into_iter()
-        .enumerate()
-        .find(|(_, o)| {
-            if let Occupant::Piece(Piece(PieceType::K, s)) = o {
-                if *s != side {
-                    true
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        })
-        .unwrap()
-        .0;
+    let enemy_king = find_king(!side, content);
     Position {
         content: content.clone(),
         side,
@@ -73,6 +58,16 @@ pub fn king_capture_pseudolegal(content: &[Occupant; 64], side: bool) -> bool {
         ep_target: None,
     }
     .controls_square(enemy_king, side)
+}
+
+/// Returns the square index of the king of color `color`.
+pub fn find_king(color: bool, content: &[Occupant; 64]) -> usize {
+    content
+        .into_iter()
+        .enumerate()
+        .find(|(_, o)| if let Occupant::Piece(Piece(PieceType::K, s)) = o { *s == color } else { false })
+        .unwrap()
+        .0
 }
 
 /// Changes the board content based on the given move.

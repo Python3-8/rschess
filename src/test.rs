@@ -230,4 +230,32 @@ fn legal_moves() {
         Move(40, 33, None),
     ];
     check(board, &legal);
+    let board = Board::from_fen("8/8/8/8/8/4k3/4p3/4K2R w K - 0 1").unwrap();
+    let legal = [
+        Move(7, 6, None),
+        Move(7, 5, None),
+        Move(7, 15, None),
+        Move(7, 23, None),
+        Move(7, 31, None),
+        Move(7, 39, None),
+        Move(7, 47, None),
+        Move(7, 55, None),
+        Move(7, 63, None),
+    ];
+    check(board, &legal);
+    let board = Board::from_fen("8/8/8/8/8/2b1kb2/3R4/4K2R w K - 0 1").unwrap();
+    let legal = [
+        Move(4, 5, None),
+        Move(4, 6, Some(PieceType::K)),
+        Move(7, 6, None),
+        Move(7, 5, None),
+        Move(7, 15, None),
+        Move(7, 23, None),
+        Move(7, 31, None),
+        Move(7, 39, None),
+        Move(7, 47, None),
+        Move(7, 55, None),
+        Move(7, 63, None),
+    ];
+    check(board, &legal);
 }
