@@ -1,209 +1,11 @@
 //! rschess is yet another chess library for Rust, with the aim to be as feature-rich as possible. It is still IN DEVELOPMENT, and NOT FIT FOR USE.
 
 mod helpers;
+mod position;
 
-/// The structure for a chess position
-#[derive(Eq, PartialEq, Clone, Debug)]
-struct Position {
-    /// The board content; each square is represented by a number 0..64 where a1 is 0 and h8 is 63
-    content: [Occupant; 64],
-    /// The side to move; white is `true` and black is `false`
-    side: bool,
-    /// The indices of rook locations representing castling rights for both sides in the format [K, Q, k, q]
-    castling_rights: [Option<usize>; 4],
-    /// The index of the en passant target square, 0..64
-    ep_target: Option<usize>,
-}
+use std::fmt;
 
-impl Position {
-    /// Generates pseudolegal moves in the position.
-    fn gen_pseudolegal_moves(&self) -> Vec<Move> {
-        let Self {
-            content,
-            castling_rights,
-            ep_target,
-            side,
-        } = self;
-        let mut pseudolegal_moves = Vec::new();
-        for (i, sq) in content.iter().enumerate() {
-            if let Occupant::Piece(piece) = sq {
-                if piece.1 != *side {
-                    continue;
-                }
-                match piece.0 {
-                    PieceType::K => {
-                        let mut possible_dests = Vec::new();
-                        for axis in [1, 8, 7, 9] {
-                            if helpers::long_range_can_move(i, axis as isize) {
-                                possible_dests.push(i + axis);
-                            }
-                            if helpers::long_range_can_move(i, -(axis as isize)) {
-                                possible_dests.push(i - axis);
-                            }
-                        }
-                        possible_dests.retain(|&dest| match content[dest] {
-                            Occupant::Piece(Piece(_, color)) => color != *side,
-                            _ => true,
-                        });
-                        pseudolegal_moves.extend(possible_dests.into_iter().map(|d| Move(i, d, None)));
-                        let castling_rights_idx_offset = if *side { 0 } else { 2 };
-                        let (oo_sq, ooo_sq) = if *side { (6, 2) } else { (62, 58) };
-                        if castling_rights[castling_rights_idx_offset].is_some() && helpers::count_pieces(i + 1..=oo_sq, content) <= 1 {
-                            pseudolegal_moves.push(Move(i, oo_sq, Some(SpecialMoveType::CastlingKingside)));
-                        }
-                        if castling_rights[castling_rights_idx_offset + 1].is_some() && helpers::count_pieces(ooo_sq..i, content) <= 1 {
-                            pseudolegal_moves.push(Move(i, ooo_sq, Some(SpecialMoveType::CastlingQueenside)));
-                        }
-                    }
-                    PieceType::N => {
-                        let b_r_axes = [(7, [-1, 8]), (9, [8, 1]), (-7, [1, -8]), (-9, [-8, -1])];
-                        let mut dest_squares = Vec::new();
-                        for (b_axis, r_axes) in b_r_axes {
-                            if !helpers::long_range_can_move(i, b_axis) {
-                                continue;
-                            }
-                            let b_dest = i as isize + b_axis;
-                            for r_axis in r_axes {
-                                if !helpers::long_range_can_move(b_dest as usize, r_axis) {
-                                    continue;
-                                }
-                                dest_squares.push((b_dest + r_axis) as usize);
-                            }
-                        }
-                        pseudolegal_moves.extend(
-                            dest_squares
-                                .into_iter()
-                                .filter(|&dest| match content[dest] {
-                                    Occupant::Piece(Piece(_, color)) => color != *side,
-                                    _ => true,
-                                })
-                                .map(|dest| Move(i, dest, None)),
-                        )
-                    }
-                    PieceType::P => {
-                        let mut possible_dests = Vec::new();
-                        if *side {
-                            if let Occupant::Empty = content[i + 8] {
-                                possible_dests.push((i + 8, false));
-                                if (8..16).contains(&i) && content[i + 16] == Occupant::Empty {
-                                    possible_dests.push((i + 16, false))
-                                }
-                            }
-                            if helpers::long_range_can_move(i, 7) {
-                                if let Occupant::Piece(Piece(_, color)) = content[i + 7] {
-                                    if !color {
-                                        possible_dests.push((i + 7, false));
-                                    }
-                                } else if ep_target.is_some() && ep_target.unwrap() == i + 7 {
-                                    possible_dests.push((i + 7, true));
-                                }
-                            }
-                            if helpers::long_range_can_move(i, 9) {
-                                if let Occupant::Piece(Piece(_, color)) = content[i + 9] {
-                                    if !color {
-                                        possible_dests.push((i + 9, false));
-                                    }
-                                } else if ep_target.is_some() && ep_target.unwrap() == i + 9 {
-                                    possible_dests.push((i + 9, true));
-                                }
-                            }
-                        } else {
-                            if let Occupant::Empty = content[i - 8] {
-                                possible_dests.push((i - 8, false));
-                                if (48..56).contains(&i) && content[i - 16] == Occupant::Empty {
-                                    possible_dests.push((i - 16, false))
-                                }
-                            }
-                            if helpers::long_range_can_move(i, -9) {
-                                if let Occupant::Piece(Piece(_, color)) = content[i - 9] {
-                                    if color {
-                                        possible_dests.push((i - 9, false));
-                                    }
-                                } else if ep_target.is_some() && ep_target.unwrap() == i - 9 {
-                                    possible_dests.push((i - 9, true));
-                                }
-                            }
-                            if helpers::long_range_can_move(i, -7) {
-                                if let Occupant::Piece(Piece(_, color)) = content[i - 7] {
-                                    if color {
-                                        possible_dests.push((i - 7, false));
-                                    }
-                                } else if ep_target.is_some() && ep_target.unwrap() == i - 7 {
-                                    possible_dests.push((i - 7, true));
-                                }
-                            }
-                        }
-                        pseudolegal_moves.extend(possible_dests.into_iter().flat_map(|(dest, ep)| {
-                            if (0..8).contains(&dest) || (56..64).contains(&dest) {
-                                [PieceType::Q, PieceType::R, PieceType::B, PieceType::N]
-                                    .into_iter()
-                                    .map(|p| Move(i, dest, Some(SpecialMoveType::Promotion(p))))
-                                    .collect()
-                            } else {
-                                vec![Move(i, dest, if ep { Some(SpecialMoveType::EnPassant) } else { None })]
-                            }
-                        }));
-                    }
-                    long_range_type => pseudolegal_moves.append(&mut self.gen_long_range_piece_pseudolegal_moves(i, long_range_type)),
-                }
-            }
-        }
-        pseudolegal_moves
-    }
-
-    /// Generates pseudolegal moves for a long-range piece.
-    fn gen_long_range_piece_pseudolegal_moves(&self, sq: usize, piece_type: PieceType) -> Vec<Move> {
-        let Self { content, side, .. } = self;
-        let axes = match piece_type {
-            PieceType::Q => vec![1, 8, 7, 9],
-            PieceType::R => vec![1, 8],
-            PieceType::B => vec![7, 9],
-            _ => panic!("not a long-range piece"),
-        };
-        let mut dest_squares = Vec::new();
-        for axis in axes {
-            'axis: for axis_direction in [-axis, axis] {
-                let mut current_sq = sq as isize;
-                while helpers::long_range_can_move(current_sq as usize, axis_direction) {
-                    let mut skip = false;
-                    current_sq += axis_direction;
-                    if let Occupant::Piece(Piece(_, color)) = content[current_sq as usize] {
-                        if color == *side {
-                            continue 'axis;
-                        } else {
-                            skip = true;
-                        }
-                    }
-                    dest_squares.push(current_sq as usize);
-                    if skip {
-                        continue 'axis;
-                    }
-                }
-            }
-        }
-        dest_squares.into_iter().map(|dest| Move(sq, dest, None)).collect()
-    }
-
-    /// Checks whether the given side controls a specified square in this position.
-    pub fn controls_square(&self, sq: usize, side: bool) -> bool {
-        let Self {
-            mut content,
-            castling_rights,
-            ep_target,
-            ..
-        } = self.clone();
-        content[sq] = Occupant::Piece(Piece(PieceType::P, !side));
-        Self {
-            content,
-            side,
-            castling_rights,
-            ep_target,
-        }
-        .gen_pseudolegal_moves()
-        .into_iter()
-        .any(|Move(_, dest, _)| dest == sq)
-    }
-}
+use position::Position;
 
 /// The structure for a chessboard/game
 #[derive(Debug)]
@@ -437,7 +239,7 @@ impl Board {
                 "Invalid FEN: Sixth field (fullmove number) cannot contain a value less than 1 (it starts at 1 and increments after Black's move), got {fullmove_number}"
             ));
         }
-        Ok(Self {
+        let mut board = Self {
             position: position.clone(),
             halfmove_clock,
             fullmove_number,
@@ -445,93 +247,15 @@ impl Board {
             position_history: vec![position],
             move_history: Vec::new(),
             initial_fen: fen.to_owned(),
-        })
+        };
+        board.check_game_over();
+        Ok(board)
     }
 
     /// Returns the representation of the board state in standard FEN.
-    /// If standard FEN is inadequate for representing castling rights, a mix of standard FEN and Shredder-FEN will be generated.
+    /// If standard FEN is inadequate for representing castling rights, a mixture of standard FEN and Shredder-FEN will be generated.
     pub fn to_fen(&self) -> String {
-        let Position {
-            content,
-            side,
-            castling_rights,
-            ep_target,
-        } = self.position;
-        let mut rankstrs = Vec::new();
-        for rank in content.chunks(8).rev() {
-            let mut rankstr = String::new();
-            let mut empty = 0;
-            for sq in rank {
-                match sq {
-                    Occupant::Piece(p) => {
-                        if empty > 0 {
-                            rankstr.push(char::from_digit(empty, 10).unwrap());
-                            empty = 0;
-                        }
-                        rankstr.push((*p).into());
-                    }
-                    Occupant::Empty => {
-                        empty += 1;
-                    }
-                }
-            }
-            if empty > 0 {
-                rankstr.push(char::from_digit(empty, 10).unwrap());
-            }
-            rankstrs.push(rankstr);
-        }
-        let board_data = rankstrs.join("/");
-        let active_color = if side { "w".to_owned() } else { "b".to_owned() };
-        let mut castling_availability = String::new();
-        let count_rooks = |rng, color| helpers::count_piece(rng, Piece(PieceType::R, color), &content);
-        let (wk, bk) = (helpers::find_king(true, &content), helpers::find_king(false, &content));
-        if castling_rights[0].is_some() {
-            castling_availability.push(if count_rooks(wk + 1..8, true) == 1 {
-                'K'
-            } else {
-                helpers::idx_to_sq(castling_rights[0].unwrap()).0.to_ascii_uppercase()
-            });
-        }
-        if castling_rights[1].is_some() {
-            castling_availability.push(if count_rooks(0..wk, true) == 1 {
-                'Q'
-            } else {
-                helpers::idx_to_sq(castling_rights[1].unwrap()).0.to_ascii_uppercase()
-            });
-        }
-        if castling_rights[2].is_some() {
-            castling_availability.push(if count_rooks(bk + 1..64, false) == 1 {
-                'k'
-            } else {
-                helpers::idx_to_sq(castling_rights[2].unwrap()).0
-            });
-        }
-        if castling_rights[3].is_some() {
-            castling_availability.push(if count_rooks(56..bk, false) == 1 {
-                'q'
-            } else {
-                helpers::idx_to_sq(castling_rights[2].unwrap()).0
-            });
-        }
-        if castling_availability.is_empty() {
-            castling_availability.push('-');
-        }
-        let en_passant_target_square;
-        if let Some(target) = ep_target {
-            let (f, r) = helpers::idx_to_sq(target);
-            en_passant_target_square = [f.to_string(), r.to_string()].join("");
-        } else {
-            en_passant_target_square = "-".to_owned();
-        }
-        [
-            board_data,
-            active_color,
-            castling_availability,
-            en_passant_target_square,
-            self.halfmove_clock.to_string(),
-            self.fullmove_number.to_string(),
-        ]
-        .join(" ")
+        [self.position.to_fen(), self.halfmove_clock.to_string(), self.fullmove_number.to_string()].join(" ")
     }
 
     /// Generates the legal moves in the position.
@@ -559,10 +283,10 @@ impl Board {
     }
 
     /// Plays on the board the given move, returning an error if the move is illegal.
-    pub fn make_move(&mut self, move_: Move) -> Result<(), ()> {
+    pub fn make_move(&mut self, move_: Move) -> Result<(), IllegalMoveError> {
         let legal_moves = self.gen_legal_moves();
         if !legal_moves.contains(&move_) {
-            return Err(());
+            return Err(IllegalMoveError);
         }
         let castling_rights_idx_offset = if self.position.side { 0 } else { 2 };
         let side = self.position.side;
@@ -597,7 +321,7 @@ impl Board {
         let new_content = helpers::change_content(&self.position.content, &move_);
         let new_position = Position {
             content: new_content,
-            side: !side,
+            side,
             castling_rights,
             ep_target,
         };
@@ -605,9 +329,44 @@ impl Board {
         self.position = new_position;
         self.move_history.push(move_);
         (self.halfmove_clock, self.fullmove_number) = (halfmove_clock, fullmove_number);
+        self.check_game_over();
+        Ok(())
+    }
+
+    fn check_game_over(&mut self) {
         if self.is_fivefold_repetition() || self.is_seventy_five_move_rule() || self.is_stalemate() || self.is_insufficient_material() || self.is_checkmate() {
             self.ongoing = false;
         }
+    }
+
+    /// Attempts to parse the UCI representation of a move and play it on the board, returning an error if the move is invalid or illegal.
+    pub fn make_move_uci(&mut self, uci: &str) -> Result<(), String> {
+        let uci_len = uci.len();
+        if ![4, 5].contains(&uci_len) {
+            return Err(format!("Invalid UCI: Expected string to be 4 or 5 characters long, got {uci_len}"));
+        }
+        let from_square = (uci.chars().next().unwrap(), uci.chars().nth(1).unwrap());
+        let to_square = (uci.chars().nth(2).unwrap(), uci.chars().nth(3).unwrap());
+        let promotion = uci.chars().nth(4);
+        if !(('a'..='h').contains(&from_square.0) && from_square.1.is_ascii_digit()) {
+            return Err(format!("Invalid UCI: '{}{}' is not a valid square name", from_square.0, from_square.1));
+        }
+        if !(('a'..='h').contains(&to_square.0) && to_square.1.is_ascii_digit()) {
+            return Err(format!("Invalid UCI: '{}{}' is not a valid square name", to_square.0, to_square.1));
+        }
+        let (src, dest) = (helpers::sq_to_idx(from_square.0, from_square.1), helpers::sq_to_idx(to_square.0, to_square.1));
+        let promotion = match promotion {
+            Some(p) => Some(PieceType::try_from(p)?),
+            _ => None,
+        };
+        let move_ = self
+            .gen_legal_moves()
+            .into_iter()
+            .find(|m| (m.0, m.1) == (src, dest) && (promotion.is_some() && m.2 == Some(SpecialMoveType::Promotion(promotion.unwrap())) || promotion.is_none()));
+        if move_.is_none() {
+            return Err(format!("Illegal move: '{uci}' is an illegal move"));
+        }
+        let _ = self.make_move(move_.unwrap());
         Ok(())
     }
 
@@ -683,8 +442,17 @@ impl Board {
     }
 
     /// Checks whether the game is drawn by insufficient material.
+    ///
+    /// rschess defines insufficient material as any of the following scenarios:
+    /// * King and knight vs. king
+    /// * King and zero or more bishops vs. king and zero or more bishops where all the bishops are on the same color complex
     pub fn is_insufficient_material(&self) -> bool {
-        todo!()
+        self.position.is_insufficient_material()
+    }
+
+    /// Checks whether there is sufficient checkmating material on the board.
+    pub fn is_sufficient_material(&self) -> bool {
+        !self.is_insufficient_material()
     }
 
     /// Checks whether any side is in check (a checkmate is also considered a check). Use [`Board::checked_side`] to know which side is in check.
@@ -725,6 +493,11 @@ impl Board {
             None
         }
     }
+
+    /// Pretty-prints the position to a string.
+    pub fn pretty_print(&self) -> String {
+        self.position.pretty_print()
+    }
 }
 
 impl Default for Board {
@@ -749,45 +522,23 @@ impl TryFrom<char> for Piece {
     type Error = String;
 
     fn try_from(value: char) -> Result<Self, Self::Error> {
-        if !value.is_ascii_alphanumeric() {
-            return Err(format!("Invalid piece character: '{value}' is not ASCII alphanumeric"));
-        }
-        let color = value.is_uppercase();
-        Ok(Self(
-            match value.to_ascii_lowercase() {
-                'k' => PieceType::K,
-                'q' => PieceType::Q,
-                'b' => PieceType::B,
-                'n' => PieceType::N,
-                'r' => PieceType::R,
-                'p' => PieceType::P,
-                _ => return Err(format!("Invalid piece character: '{value}' does not correspond to any chess piece")),
-            },
-            color,
-        ))
+        Ok(Self(PieceType::try_from(value)?, value.is_ascii_uppercase()))
     }
 }
 
 impl From<Piece> for char {
     fn from(piece: Piece) -> char {
-        let ch = match piece.0 {
-            PieceType::K => 'k',
-            PieceType::Q => 'q',
-            PieceType::B => 'b',
-            PieceType::N => 'n',
-            PieceType::R => 'r',
-            PieceType::P => 'p',
-        };
+        let ch = piece.0.into();
         if piece.1 {
-            ch.to_ascii_uppercase()
-        } else {
             ch
+        } else {
+            ch.to_ascii_lowercase()
         }
     }
 }
 
 /// Represents types of pieces.
-#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub enum PieceType {
     K,
     Q,
@@ -795,6 +546,38 @@ pub enum PieceType {
     N,
     R,
     P,
+}
+
+impl TryFrom<char> for PieceType {
+    type Error = String;
+
+    fn try_from(value: char) -> Result<Self, Self::Error> {
+        if !value.is_ascii_alphanumeric() {
+            return Err(format!("Invalid piece character: '{value}' is not ASCII alphanumeric"));
+        }
+        Ok(match value.to_ascii_lowercase() {
+            'k' => Self::K,
+            'q' => Self::Q,
+            'b' => Self::B,
+            'n' => Self::N,
+            'r' => Self::R,
+            'p' => Self::P,
+            _ => return Err(format!("Invalid piece character: '{value}' does not correspond to any chess piece")),
+        })
+    }
+}
+
+impl From<PieceType> for char {
+    fn from(piece_type: PieceType) -> char {
+        match piece_type {
+            PieceType::K => 'K',
+            PieceType::Q => 'Q',
+            PieceType::B => 'B',
+            PieceType::N => 'N',
+            PieceType::R => 'R',
+            PieceType::P => 'P',
+        }
+    }
 }
 
 /// The structure for a chess move, in the format (_source square_, _destination square_, _castling/promotion/en passant_)
@@ -843,6 +626,18 @@ pub enum SpecialMoveType {
     Promotion(PieceType),
     EnPassant,
 }
+
+/// The error type used to convey the illegality of a move.
+#[derive(Debug)]
+pub struct IllegalMoveError;
+
+impl fmt::Display for IllegalMoveError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Illegal move: This move is illegal")
+    }
+}
+
+impl std::error::Error for IllegalMoveError {}
 
 #[cfg(test)]
 mod test;

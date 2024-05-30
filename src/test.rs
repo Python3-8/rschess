@@ -196,17 +196,7 @@ fn legal_moves() {
     ];
     check(board, &legal);
     let board = Board::from_fen("k7/3N4/K7/8/8/8/8/8 w - - 0 1").unwrap();
-    let legal = [
-        Move(40, 41, None),
-        Move(40, 32, None),
-        Move(40, 33, None),
-        Move(51, 57, None),
-        Move(51, 61, None),
-        Move(51, 45, None),
-        Move(51, 36, None),
-        Move(51, 34, None),
-        Move(51, 41, None),
-    ]; // TODO insufficient material detection
+    let legal = [];
     check(board, &legal);
     let board = Board::from_fen("k7/3P4/K7/8/8/8/8/8 w - - 0 1").unwrap();
     let legal = [

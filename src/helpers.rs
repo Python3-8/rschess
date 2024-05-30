@@ -115,3 +115,12 @@ pub fn change_content(content: &[Occupant; 64], move_: &Move) -> [Occupant; 64] 
     }
     content
 }
+
+/// Checks whether `sq` is a light square.
+pub fn color_complex_of(sq: usize) -> bool {
+    (match sq {
+        0..=7 | 16..=23 | 32..=39 | 48..=55 => sq + 1,
+        _ => sq,
+    }) % 2
+        == 0
+}
