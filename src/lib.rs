@@ -9,8 +9,8 @@ struct Position {
     content: [Occupant; 64],
     /// The side to move; white is `true` and black is `false`
     side: bool,
-    /// The castling rights for both sides in the format [K, Q, k, q]
-    castling_rights: [bool; 4],
+    /// The indices of rook locations representing castling rights for both sides in the format [K, Q, k, q]
+    castling_rights: [Option<usize>; 4],
     /// The index of the en passant target square, 0..64
     ep_target: Option<usize>,
 }
@@ -25,7 +25,7 @@ impl Position {
             side,
         } = self;
         let mut pseudolegal_moves = Vec::new();
-        for (i, sq) in content.into_iter().enumerate() {
+        for (i, sq) in content.iter().enumerate() {
             if let Occupant::Piece(piece) = sq {
                 if piece.1 != *side {
                     continue;
@@ -41,21 +41,18 @@ impl Position {
                                 possible_dests.push(i - axis);
                             }
                         }
-                        possible_dests = possible_dests
-                            .into_iter()
-                            .filter(|&dest| match content[dest] {
-                                Occupant::Piece(Piece(_, color)) => color != *side,
-                                _ => true,
-                            })
-                            .collect();
+                        possible_dests.retain(|&dest| match content[dest] {
+                            Occupant::Piece(Piece(_, color)) => color != *side,
+                            _ => true,
+                        });
                         pseudolegal_moves.extend(possible_dests.into_iter().map(|d| Move(i, d, None)));
                         let castling_rights_idx_offset = if *side { 0 } else { 2 };
                         let (oo_sq, ooo_sq) = if *side { (6, 2) } else { (62, 58) };
-                        if castling_rights[castling_rights_idx_offset] && helpers::count_pieces(i + 1..=oo_sq, content) <= 1 {
-                            pseudolegal_moves.push(Move(i, oo_sq, Some(PieceType::K)));
+                        if castling_rights[castling_rights_idx_offset].is_some() && helpers::count_pieces(i + 1..=oo_sq, content) <= 1 {
+                            pseudolegal_moves.push(Move(i, oo_sq, Some(SpecialMoveType::CastlingKingside)));
                         }
-                        if castling_rights[castling_rights_idx_offset + 1] && helpers::count_pieces(ooo_sq..i, content) <= 1 {
-                            pseudolegal_moves.push(Move(i, ooo_sq, Some(PieceType::K)));
+                        if castling_rights[castling_rights_idx_offset + 1].is_some() && helpers::count_pieces(ooo_sq..i, content) <= 1 {
+                            pseudolegal_moves.push(Move(i, ooo_sq, Some(SpecialMoveType::CastlingQueenside)));
                         }
                     }
                     PieceType::N => {
@@ -136,18 +133,16 @@ impl Position {
                                 }
                             }
                         }
-                        pseudolegal_moves.extend(
-                            possible_dests
-                                .into_iter()
-                                .map(|(dest, ep)| {
-                                    if (0..8).contains(&dest) || (56..64).contains(&dest) {
-                                        [PieceType::Q, PieceType::R, PieceType::B, PieceType::N].into_iter().map(|p| Move(i, dest, Some(p))).collect()
-                                    } else {
-                                        vec![Move(i, dest, if ep { Some(PieceType::P) } else { None })]
-                                    }
-                                })
-                                .flatten(),
-                        );
+                        pseudolegal_moves.extend(possible_dests.into_iter().flat_map(|(dest, ep)| {
+                            if (0..8).contains(&dest) || (56..64).contains(&dest) {
+                                [PieceType::Q, PieceType::R, PieceType::B, PieceType::N]
+                                    .into_iter()
+                                    .map(|p| Move(i, dest, Some(SpecialMoveType::Promotion(p))))
+                                    .collect()
+                            } else {
+                                vec![Move(i, dest, if ep { Some(SpecialMoveType::EnPassant) } else { None })]
+                            }
+                        }));
                     }
                     long_range_type => pseudolegal_moves.append(&mut self.gen_long_range_piece_pseudolegal_moves(i, long_range_type)),
                 }
@@ -172,15 +167,12 @@ impl Position {
                 while helpers::long_range_can_move(current_sq as usize, axis_direction) {
                     let mut skip = false;
                     current_sq += axis_direction;
-                    match content[current_sq as usize] {
-                        Occupant::Piece(Piece(_, color)) => {
-                            if color == *side {
-                                continue 'axis;
-                            } else {
-                                skip = true;
-                            }
+                    if let Occupant::Piece(Piece(_, color)) = content[current_sq as usize] {
+                        if color == *side {
+                            continue 'axis;
+                        } else {
+                            skip = true;
                         }
-                        _ => (),
                     }
                     dest_squares.push(current_sq as usize);
                     if skip {
@@ -228,6 +220,8 @@ pub struct Board {
     position_history: Vec<Position>,
     /// The list of moves that have occurred on the board
     move_history: Vec<Move>,
+    /// The FEN string representing the initial game state
+    initial_fen: String,
 }
 
 impl Board {
@@ -311,12 +305,11 @@ impl Board {
             return Err("Invalid FEN: a valid chess position must have one white king and one black king".to_owned());
         }
         let turn = fields[1];
-        let side;
-        match turn {
-            "w" => side = true,
-            "b" => side = false,
+        let side = match turn {
+            "w" => true,
+            "b" => false,
             _ => return Err(format!("Invalid FEN: Expected second field (side to move) to be 'w' or 'b', got '{turn}'")),
-        }
+        };
         if helpers::king_capture_pseudolegal(&content, side) {
             return Err("Invalid FEN: When one side is in check, it cannot be the other side's turn to move".to_owned());
         }
@@ -327,7 +320,7 @@ impl Board {
                 "Invalid FEN: Expected third field (castling rights) to be 1 to 4 characters long, got {len_castling} characters"
             ));
         }
-        let mut castling_rights = [false; 4];
+        let mut castling_rights_old = [false; 4];
         if castling != "-" {
             for ch in castling.chars() {
                 match ch {
@@ -335,54 +328,68 @@ impl Board {
                         if wk_pos > 6 {
                             return Err("Invalid FEN: White king must be from a1 to g1 to have kingside castling rights".to_owned());
                         }
-                        if castling_rights[0] {
+                        if castling_rights_old[0] {
                             return Err("Invalid FEN: Found more than one occurrence of 'K' in third field (castling rights)".to_owned());
                         }
-                        castling_rights[0] = true;
+                        castling_rights_old[0] = true;
                     }
                     'Q' => {
                         if !(1..=7).contains(&wk_pos) {
                             return Err("Invalid FEN: White king must be from b1 to h1 to have queenside castling rights".to_owned());
                         }
-                        if castling_rights[1] {
+                        if castling_rights_old[1] {
                             return Err("Invalid FEN: Found more than one occurrence of 'Q' in third field (castling rights)".to_owned());
                         }
-                        castling_rights[1] = true;
+                        castling_rights_old[1] = true;
                     }
                     'k' => {
                         if !(56..=62).contains(&bk_pos) {
                             return Err("Invalid FEN: Black king must be from a8 to g8 to have kingside castling rights".to_owned());
                         }
-                        if castling_rights[2] {
+                        if castling_rights_old[2] {
                             return Err("Invalid FEN: Found more than one occurrence of 'k' in third field (castling rights)".to_owned());
                         }
-                        castling_rights[2] = true;
+                        castling_rights_old[2] = true;
                     }
                     'q' => {
                         if !(57..=63).contains(&bk_pos) {
                             return Err("Invalid FEN: Black king must be from b8 to h8 to have queenside castling rights".to_owned());
                         }
-                        if castling_rights[3] {
+                        if castling_rights_old[3] {
                             return Err("Invalid FEN: Found more than one occurrence of 'q' in third field (castling rights)".to_owned());
                         }
-                        castling_rights[3] = true;
+                        castling_rights_old[3] = true;
                     }
                     _ => return Err(format!("Invalid FEN: Expected third field (castling rights) to contain '-' or a subset of 'KQkq', found '{ch}'")),
                 }
             }
         }
         let count_rooks = |rng, color| helpers::count_piece(rng, Piece(PieceType::R, color), &content);
-        if castling_rights[0] && count_rooks(wk_pos + 1..8, true) != 1 {
+        if castling_rights_old[0] && count_rooks(wk_pos + 1..8, true) != 1 {
             return Err("Invalid FEN: White must have exactly one king's rook to have kingside castling rights".to_owned());
         }
-        if castling_rights[1] && count_rooks(0..wk_pos, true) != 1 {
+        if castling_rights_old[1] && count_rooks(0..wk_pos, true) != 1 {
             return Err("Invalid FEN: White must have exactly one queen's rook to have queenside castling rights".to_owned());
         }
-        if castling_rights[2] && count_rooks(bk_pos + 1..64, false) != 1 {
+        if castling_rights_old[2] && count_rooks(bk_pos + 1..64, false) != 1 {
             return Err("Invalid FEN: Black must have exactly one king's rook to have kingside castling rights".to_owned());
         }
-        if castling_rights[3] && count_rooks(56..bk_pos, false) != 1 {
+        if castling_rights_old[3] && count_rooks(56..bk_pos, false) != 1 {
             return Err("Invalid FEN: Black must have exactly one queen's rook to have queenside castling rights".to_owned());
+        }
+        let find_rook = |rng, color| helpers::find_pieces(Piece(PieceType::R, color), rng, &content)[0];
+        let mut castling_rights = [None; 4];
+        if castling_rights_old[0] {
+            castling_rights[0] = Some(find_rook(wk_pos + 1..8, true));
+        }
+        if castling_rights_old[1] {
+            castling_rights[1] = Some(find_rook(0..wk_pos, true));
+        }
+        if castling_rights_old[2] {
+            castling_rights[2] = Some(find_rook(bk_pos + 1..64, false));
+        }
+        if castling_rights_old[3] {
+            castling_rights[3] = Some(find_rook(56..bk_pos, false));
         }
         let ep = fields[3];
         let len_ep = ep.len();
@@ -437,10 +444,12 @@ impl Board {
             ongoing: halfmove_clock < 150,
             position_history: vec![position],
             move_history: Vec::new(),
+            initial_fen: fen.to_owned(),
         })
     }
 
     /// Returns the representation of the board state in standard FEN.
+    /// If standard FEN is inadequate for representing castling rights, a mix of standard FEN and Shredder-FEN will be generated.
     pub fn to_fen(&self) -> String {
         let Position {
             content,
@@ -474,17 +483,35 @@ impl Board {
         let board_data = rankstrs.join("/");
         let active_color = if side { "w".to_owned() } else { "b".to_owned() };
         let mut castling_availability = String::new();
-        if castling_rights[0] {
-            castling_availability.push('K');
+        let count_rooks = |rng, color| helpers::count_piece(rng, Piece(PieceType::R, color), &content);
+        let (wk, bk) = (helpers::find_king(true, &content), helpers::find_king(false, &content));
+        if castling_rights[0].is_some() {
+            castling_availability.push(if count_rooks(wk + 1..8, true) == 1 {
+                'K'
+            } else {
+                helpers::idx_to_sq(castling_rights[0].unwrap()).0.to_ascii_uppercase()
+            });
         }
-        if castling_rights[1] {
-            castling_availability.push('Q');
+        if castling_rights[1].is_some() {
+            castling_availability.push(if count_rooks(0..wk, true) == 1 {
+                'Q'
+            } else {
+                helpers::idx_to_sq(castling_rights[1].unwrap()).0.to_ascii_uppercase()
+            });
         }
-        if castling_rights[2] {
-            castling_availability.push('k');
+        if castling_rights[2].is_some() {
+            castling_availability.push(if count_rooks(bk + 1..64, false) == 1 {
+                'k'
+            } else {
+                helpers::idx_to_sq(castling_rights[2].unwrap()).0
+            });
         }
-        if castling_rights[3] {
-            castling_availability.push('q');
+        if castling_rights[3].is_some() {
+            castling_availability.push(if count_rooks(56..bk, false) == 1 {
+                'q'
+            } else {
+                helpers::idx_to_sq(castling_rights[2].unwrap()).0
+            });
         }
         if castling_availability.is_empty() {
             castling_availability.push('-');
@@ -515,8 +542,8 @@ impl Board {
                 .gen_pseudolegal_moves()
                 .into_iter()
                 .filter(|move_| {
-                    if let Move(src, dest, Some(PieceType::K)) = move_ {
-                        for sq in *src..=*dest {
+                    if let Move(src, dest, Some(SpecialMoveType::CastlingKingside | SpecialMoveType::CastlingQueenside)) = move_ {
+                        for sq in *std::cmp::min(src, dest)..=*std::cmp::max(src, dest) {
                             if self.position.controls_square(sq, !side) {
                                 return false;
                             }
@@ -539,32 +566,32 @@ impl Board {
         }
         let castling_rights_idx_offset = if self.position.side { 0 } else { 2 };
         let side = self.position.side;
-        let mut castling_rights = self.position.castling_rights.clone();
+        let mut castling_rights = self.position.castling_rights;
         let mut ep_target = None;
         let mut halfmove_clock = self.halfmove_clock;
         let fullmove_number = self.fullmove_number + if side { 0 } else { 1 };
         let (move_src, moved_piece) = (move_.0, self.position.content[move_.0]);
         let (move_dest, dest_occ) = (move_.1, self.position.content[move_.1]);
-        if let Occupant::Piece(Piece(piece_type, _)) = dest_occ {
+        if let Occupant::Piece(_) = dest_occ {
             halfmove_clock = 0;
-            if piece_type == PieceType::R {
-                // TODO remove enemy side's appropriate castling rights
-            }
         } else {
             halfmove_clock += 1;
         }
         match moved_piece {
-            Occupant::Piece(Piece(PieceType::K, _)) => (castling_rights[castling_rights_idx_offset], castling_rights[castling_rights_idx_offset + 1]) = (false, false),
+            Occupant::Piece(Piece(PieceType::K, _)) => (castling_rights[castling_rights_idx_offset], castling_rights[castling_rights_idx_offset + 1]) = (None, None),
             Occupant::Piece(Piece(PieceType::P, _)) => {
                 halfmove_clock = 0;
                 if (std::cmp::max(move_src, move_dest) - std::cmp::min(move_src, move_dest)) == 16 {
                     ep_target = Some(if side { move_src + 8 } else { move_src - 8 });
                 }
             }
-            Occupant::Piece(Piece(PieceType::R, _)) => {
-                // TODO remove appropriate castling rights
-            }
             _ => (),
+        }
+        for maybe_rook in [move_src, move_dest] {
+            let maybe_right = castling_rights.iter().enumerate().find(|(_, right)| right.is_some() && right.unwrap() == maybe_rook);
+            if maybe_right.is_some() {
+                castling_rights[maybe_right.unwrap().0] = None;
+            }
         }
         let side = !self.position.side;
         let new_content = helpers::change_content(&self.position.content, &move_);
@@ -650,7 +677,7 @@ impl Board {
         self.halfmove_clock == 150
     }
 
-    /// Checks whether the game is drawn by stalemate. Use `Board::stalemated_side` to know which side is in stalemate.
+    /// Checks whether the game is drawn by stalemate. Use [`Board::stalemated_side`] to know which side is in stalemate.
     pub fn is_stalemate(&self) -> bool {
         !self.is_check() && self.gen_legal_moves().is_empty()
     }
@@ -660,12 +687,12 @@ impl Board {
         todo!()
     }
 
-    /// Checks whether any side is in check (a checkmate is also considered a check). Use `Board::checked_side` to know which side is in check.
+    /// Checks whether any side is in check (a checkmate is also considered a check). Use [`Board::checked_side`] to know which side is in check.
     pub fn is_check(&self) -> bool {
         self.checked_side().is_some()
     }
 
-    /// Checks whether any side is in checkmate. Use `Board::checkmated_side` to know which side is in checkmate.
+    /// Checks whether any side is in checkmate. Use [`Board::checkmated_side`] to know which side is in checkmate.
     pub fn is_checkmate(&self) -> bool {
         self.is_check() && self.gen_legal_moves().is_empty()
     }
@@ -707,12 +734,14 @@ impl Default for Board {
     }
 }
 
+/// Represents the occupant of a square.
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 enum Occupant {
     Piece(Piece),
     Empty,
 }
 
+/// Represents a piece.
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 struct Piece(PieceType, bool);
 
@@ -757,8 +786,9 @@ impl From<Piece> for char {
     }
 }
 
+/// Represents types of pieces.
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-enum PieceType {
+pub enum PieceType {
     K,
     Q,
     B,
@@ -767,21 +797,51 @@ enum PieceType {
     P,
 }
 
-/// The structure for a chess move, in the format (<source square>, <destination square>, <castling/promotion/en passant>)
+/// The structure for a chess move, in the format (_source square_, _destination square_, _castling/promotion/en passant_)
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-pub struct Move(usize, usize, Option<PieceType>);
+pub struct Move(usize, usize, Option<SpecialMoveType>);
 
+impl Move {
+    /// Returns the source square of the move in the format (_file_, _rank_)
+    pub fn from_square(&self) -> (char, char) {
+        helpers::idx_to_sq(self.0)
+    }
+
+    /// Returns the destination square of the move in the format (_file_, _rank_)
+    pub fn to_square(&self) -> (char, char) {
+        helpers::idx_to_sq(self.1)
+    }
+
+    /// Returns the type of special move (castling/promotion/en passant) if this move is a special move (otherwise `None`).
+    pub fn special_move_type(&self) -> Option<SpecialMoveType> {
+        self.2
+    }
+}
+
+/// Represents game results.
+#[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub enum GameResult {
     WhiteWins,
     Draw(DrawType),
     BlackWins,
 }
 
+/// Represents types of draws.
+#[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub enum DrawType {
     FivefoldRepetition,
     SeventyFiveMoveRule,
     Stalemate(bool),
     InsufficientMaterial,
+}
+
+/// Represents types of special moves (castling/promotion/en passant).
+#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+pub enum SpecialMoveType {
+    CastlingKingside,
+    CastlingQueenside,
+    Promotion(PieceType),
+    EnPassant,
 }
 
 #[cfg(test)]

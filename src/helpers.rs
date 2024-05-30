@@ -1,3 +1,5 @@
+use crate::SpecialMoveType;
+
 use super::{Move, Occupant, Piece, PieceType, Position};
 use std::ops::RangeBounds;
 
@@ -52,9 +54,9 @@ where
 pub fn king_capture_pseudolegal(content: &[Occupant; 64], side: bool) -> bool {
     let enemy_king = find_king(!side, content);
     Position {
-        content: content.clone(),
+        content: *content,
         side,
-        castling_rights: [false, false, false, false],
+        castling_rights: [None, None, None, None],
         ep_target: None,
     }
     .controls_square(enemy_king, side)
@@ -63,7 +65,7 @@ pub fn king_capture_pseudolegal(content: &[Occupant; 64], side: bool) -> bool {
 /// Returns the square index of the king of color `color`.
 pub fn find_king(color: bool, content: &[Occupant; 64]) -> usize {
     content
-        .into_iter()
+        .iter()
         .enumerate()
         .find(|(_, o)| if let Occupant::Piece(Piece(PieceType::K, s)) = o { *s == color } else { false })
         .unwrap()
@@ -72,11 +74,11 @@ pub fn find_king(color: bool, content: &[Occupant; 64]) -> usize {
 
 /// Changes the board content based on the given move.
 pub fn change_content(content: &[Occupant; 64], move_: &Move) -> [Occupant; 64] {
-    let mut content = content.clone();
+    let mut content = *content;
     let Move(src, dest, spec) = move_;
     (content[*src], content[*dest]) = (Occupant::Empty, content[*src]);
     match spec {
-        Some(PieceType::K) => match *dest {
+        Some(SpecialMoveType::CastlingKingside | SpecialMoveType::CastlingQueenside) => match *dest {
             6 => {
                 let rook = Piece(PieceType::R, true);
                 let krook = find_pieces(rook, src + 1..=6, &content)[0];
@@ -99,12 +101,12 @@ pub fn change_content(content: &[Occupant; 64], move_: &Move) -> [Occupant; 64] 
             }
             _ => panic!("the universe is malfunctioning"),
         },
-        Some(PieceType::P) => match dest {
+        Some(SpecialMoveType::EnPassant) => match dest {
             16..=23 => content[dest + 8] = Occupant::Empty,
             40..=47 => content[dest - 8] = Occupant::Empty,
             _ => panic!("the universe is malfunctioning"),
         },
-        Some(piece_type) => {
+        Some(SpecialMoveType::Promotion(piece_type)) => {
             if let Occupant::Piece(Piece(_, color)) = content[*dest] {
                 content[*dest] = Occupant::Piece(Piece(*piece_type, color));
             }

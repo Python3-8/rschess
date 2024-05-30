@@ -1,5 +1,5 @@
 use super::helpers;
-use super::{Board, Move, PieceType};
+use super::{Board, Move, PieceType, SpecialMoveType};
 
 #[test]
 fn default_board() {
@@ -99,7 +99,7 @@ fn pseudolegal_moves() {
     let board = Board::from_fen("1k6/8/1K6/2Pp4/8/8/8/8 w - d6 0 2").unwrap();
     let legal = [
         Move(34, 42, None),
-        Move(34, 43, Some(PieceType::P)),
+        Move(34, 43, Some(SpecialMoveType::EnPassant)),
         Move(41, 42, None),
         Move(41, 40, None),
         Move(41, 49, None),
@@ -131,18 +131,18 @@ fn pseudolegal_moves() {
         Move(40, 32, None),
         Move(40, 33, None),
         Move(40, 49, None),
-        Move(51, 59, Some(PieceType::Q)),
-        Move(51, 59, Some(PieceType::R)),
-        Move(51, 59, Some(PieceType::B)),
-        Move(51, 59, Some(PieceType::N)),
+        Move(51, 59, Some(SpecialMoveType::Promotion(PieceType::Q))),
+        Move(51, 59, Some(SpecialMoveType::Promotion(PieceType::R))),
+        Move(51, 59, Some(SpecialMoveType::Promotion(PieceType::B))),
+        Move(51, 59, Some(SpecialMoveType::Promotion(PieceType::N))),
     ];
     check(board, &legal);
     let board = Board::from_fen("K7/8/k7/8/8/8/7p/8 b - - 0 1").unwrap();
     let legal = [
-        Move(15, 7, Some(PieceType::Q)),
-        Move(15, 7, Some(PieceType::R)),
-        Move(15, 7, Some(PieceType::B)),
-        Move(15, 7, Some(PieceType::N)),
+        Move(15, 7, Some(SpecialMoveType::Promotion(PieceType::Q))),
+        Move(15, 7, Some(SpecialMoveType::Promotion(PieceType::R))),
+        Move(15, 7, Some(SpecialMoveType::Promotion(PieceType::B))),
+        Move(15, 7, Some(SpecialMoveType::Promotion(PieceType::N))),
         Move(40, 41, None),
         Move(40, 48, None),
         Move(40, 32, None),
@@ -188,7 +188,7 @@ fn legal_moves() {
     let board = Board::from_fen("1k6/8/1K6/2Pp4/8/8/8/8 w - d6 0 2").unwrap();
     let legal = [
         Move(34, 42, None),
-        Move(34, 43, Some(PieceType::P)),
+        Move(34, 43, Some(SpecialMoveType::EnPassant)),
         Move(41, 42, None),
         Move(41, 40, None),
         Move(41, 33, None),
@@ -213,18 +213,18 @@ fn legal_moves() {
         Move(40, 41, None),
         Move(40, 32, None),
         Move(40, 33, None),
-        Move(51, 59, Some(PieceType::Q)),
-        Move(51, 59, Some(PieceType::R)),
-        Move(51, 59, Some(PieceType::B)),
-        Move(51, 59, Some(PieceType::N)),
+        Move(51, 59, Some(SpecialMoveType::Promotion(PieceType::Q))),
+        Move(51, 59, Some(SpecialMoveType::Promotion(PieceType::R))),
+        Move(51, 59, Some(SpecialMoveType::Promotion(PieceType::B))),
+        Move(51, 59, Some(SpecialMoveType::Promotion(PieceType::N))),
     ];
     check(board, &legal);
     let board = Board::from_fen("K7/8/k7/8/8/8/7p/8 b - - 0 1").unwrap();
     let legal = [
-        Move(15, 7, Some(PieceType::Q)),
-        Move(15, 7, Some(PieceType::R)),
-        Move(15, 7, Some(PieceType::B)),
-        Move(15, 7, Some(PieceType::N)),
+        Move(15, 7, Some(SpecialMoveType::Promotion(PieceType::Q))),
+        Move(15, 7, Some(SpecialMoveType::Promotion(PieceType::R))),
+        Move(15, 7, Some(SpecialMoveType::Promotion(PieceType::B))),
+        Move(15, 7, Some(SpecialMoveType::Promotion(PieceType::N))),
         Move(40, 41, None),
         Move(40, 32, None),
         Move(40, 33, None),
@@ -246,7 +246,7 @@ fn legal_moves() {
     let board = Board::from_fen("8/8/8/8/8/2b1kb2/3R4/4K2R w K - 0 1").unwrap();
     let legal = [
         Move(4, 5, None),
-        Move(4, 6, Some(PieceType::K)),
+        Move(4, 6, Some(SpecialMoveType::CastlingKingside)),
         Move(7, 6, None),
         Move(7, 5, None),
         Move(7, 15, None),
