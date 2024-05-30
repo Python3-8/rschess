@@ -578,10 +578,56 @@ impl Board {
         self.position = new_position;
         self.move_history.push(move_);
         (self.halfmove_clock, self.fullmove_number) = (halfmove_clock, fullmove_number);
-        if self.is_fivefold_repetition() || self.is_seventy_five_move_rule() || self.is_checkmate() {
+        if self.is_fivefold_repetition() || self.is_seventy_five_move_rule() || self.is_stalemate() || self.is_insufficient_material() || self.is_checkmate() {
             self.ongoing = false;
         }
         Ok(())
+    }
+
+    /// Checks whether the game is still ongoing.
+    pub fn is_ongoing(&self) -> bool {
+        self.ongoing
+    }
+
+    /// Checks whether the game is over.
+    pub fn is_game_over(&self) -> bool {
+        !self.ongoing
+    }
+
+    /// Returns an optional game result (`None` if the game is ongoing).
+    pub fn game_result(&self) -> Option<GameResult> {
+        if self.ongoing {
+            None
+        } else {
+            Some(match self.checkmated_side() {
+                Some(false) => GameResult::WhiteWins,
+                Some(true) => GameResult::BlackWins,
+                None => match self.stalemated_side() {
+                    Some(s) => GameResult::Draw(DrawType::Stalemate(s)),
+                    None => {
+                        if self.is_fivefold_repetition() {
+                            GameResult::Draw(DrawType::FivefoldRepetition)
+                        } else if self.is_seventy_five_move_rule() {
+                            GameResult::Draw(DrawType::SeventyFiveMoveRule)
+                        } else if self.is_insufficient_material() {
+                            GameResult::Draw(DrawType::InsufficientMaterial)
+                        } else {
+                            panic!("the universe is malfunctioning")
+                        }
+                    }
+                },
+            })
+        }
+    }
+
+    /// Returns the number of halfmoves since the last pawn push or capture.
+    pub fn halfmove_clock(&self) -> usize {
+        self.halfmove_clock
+    }
+
+    /// Returns the fullmove number.
+    pub fn fullmove_number(&self) -> usize {
+        self.fullmove_number
     }
 
     /// Checks whether a threefold repetition of the position has occurred.
@@ -604,7 +650,17 @@ impl Board {
         self.halfmove_clock == 150
     }
 
-    /// Checks whether any side is in check. Use `Board::checked_side` to know which side is in check.
+    /// Checks whether the game is drawn by stalemate. Use `Board::stalemated_side` to know which side is in stalemate.
+    pub fn is_stalemate(&self) -> bool {
+        !self.is_check() && self.gen_legal_moves().is_empty()
+    }
+
+    /// Checks whether the game is drawn by insufficient material.
+    pub fn is_insufficient_material(&self) -> bool {
+        todo!()
+    }
+
+    /// Checks whether any side is in check (a checkmate is also considered a check). Use `Board::checked_side` to know which side is in check.
     pub fn is_check(&self) -> bool {
         self.checked_side().is_some()
     }
@@ -612,6 +668,15 @@ impl Board {
     /// Checks whether any side is in checkmate. Use `Board::checkmated_side` to know which side is in checkmate.
     pub fn is_checkmate(&self) -> bool {
         self.is_check() && self.gen_legal_moves().is_empty()
+    }
+
+    /// Returns an optional boolean representing the side in stalemate (`None` if neither side is in stalemate).
+    pub fn stalemated_side(&self) -> Option<bool> {
+        if self.is_stalemate() {
+            Some(self.position.side)
+        } else {
+            None
+        }
     }
 
     /// Returns an optional boolean representing the side in check (`None` if neither side is in check).
@@ -705,6 +770,19 @@ enum PieceType {
 /// The structure for a chess move, in the format (<source square>, <destination square>, <castling/promotion/en passant>)
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub struct Move(usize, usize, Option<PieceType>);
+
+pub enum GameResult {
+    WhiteWins,
+    Draw(DrawType),
+    BlackWins,
+}
+
+pub enum DrawType {
+    FivefoldRepetition,
+    SeventyFiveMoveRule,
+    Stalemate(bool),
+    InsufficientMaterial,
+}
 
 #[cfg(test)]
 mod test;
