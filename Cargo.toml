@@ -4,7 +4,7 @@ version = "0.1.1"
 edition = "2021"
 description = "A Rust chess library with the aim to be as feature-rich as possible"
 repository = "https://github.com/Python3-8/rschess"
-keywords = ["chess", "pgn", "fen", "san"]
+keywords = ["chess", "pgn", "fen", "san", "uci"]
 license = "MIT"
 
 [dependencies]
