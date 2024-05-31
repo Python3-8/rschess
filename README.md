@@ -13,7 +13,7 @@ rschess is yet another chess library for Rust, with the aim of being as feature-
 As of now (May 31, 2024) rschess has:
 * legal move generation
 * parsing/generating FEN
-* parsing UCI
+* parsing/interpreting/generating UCI and SAN
 * move history
 * board status
 * pretty-printing

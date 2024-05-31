@@ -249,3 +249,55 @@ fn legal_moves() {
     ];
     check(board, &legal);
 }
+
+#[test]
+fn to_san() {
+    let mut board = Board::from_fen("7k/4Q3/6Q1/3Q4/6Q1/8/2Q3Q1/K3Q3 w - - 0 1").unwrap();
+    assert_eq!(board.move_to_san(Move::from_uci("g6e4").unwrap()).unwrap(), "Q6e4");
+    board.make_move(Move::from_uci("g6e4").unwrap()).unwrap();
+    assert_eq!(board.stalemated_side(), Some(false));
+    let mut board = Board::from_fen("6B1/2N1N3/1N3N2/8/1N3N2/2N1N1K1/8/7k w - - 0 1").unwrap();
+    assert_eq!(board.move_to_san(Move::from_uci("c7d5").unwrap()).unwrap(), "Nc7d5");
+    assert_eq!(board.move_to_san(Move::from_uci("g8d5").unwrap()).unwrap(), "Bd5+");
+    board.make_move_uci("g8d5").unwrap();
+    board.make_move_uci("h1g1").unwrap();
+    assert_eq!(board.move_to_san(Move::from_uci("f4h3").unwrap()).unwrap(), "Nh3#");
+    board.make_move_uci("f4h3").unwrap();
+    assert_eq!(board.checkmated_side(), Some(false));
+}
+
+#[test]
+fn insufficient_material() {
+    assert!(Board::from_fen("k1b1b1b1/1b1b1b1B/b1b1b1B1/1b1b1B1B/b1b1B1B1/1b1B1B1B/b1B3B1/1B1B1B1K w - - 0 1")
+        .unwrap()
+        .is_insufficient_material());
+    assert!(!Board::from_fen("k1b1b1b1/1b1b1b1B/b1b1b1B1/1b1bbB1B/b1b1B1B1/1b1BBB1B/b1B3B1/1B1B1B1K w - - 0 1")
+        .unwrap()
+        .is_insufficient_material());
+    assert!(!Board::from_fen("kn6/8/1K6/3N4/8/8/8/8 w - - 0 1").unwrap().is_insufficient_material());
+    assert!(!Board::from_fen("kB6/8/bK6/8/8/8/8/8 w - - 0 1").unwrap().is_insufficient_material());
+    assert!(Board::from_fen("k1B5/8/bK6/8/8/8/8/8 w - - 0 1").unwrap().is_insufficient_material());
+    assert!(Board::from_fen("k1N5/8/1K6/8/8/8/8/8 w - - 0 1").unwrap().is_insufficient_material());
+}
+
+#[test]
+#[should_panic]
+fn invalid_make_move_san() {
+    let mut board = Board::default();
+    board.make_move_san("Nc3").unwrap();
+    board.make_move_san("Nc6").unwrap();
+    board.make_move_san("e3").unwrap();
+    board.make_move_san("e6").unwrap();
+    board.make_move_san("Ne2").unwrap();
+}
+
+#[test]
+fn valid_make_move_san() {
+    let mut board = Board::default();
+    board.make_move_san("Nc3").unwrap();
+    board.make_move_san("Nc6").unwrap();
+    board.make_move_san("e3").unwrap();
+    board.make_move_san("e6").unwrap();
+    board.make_move_san("Nge2").unwrap();
+    println!("{}", board.pretty_print(false));
+}

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::{helpers, Move, Occupant, Piece, PieceType, SpecialMoveType};
+use super::{helpers, IllegalMoveError, Move, Occupant, Piece, PieceType, SpecialMoveType};
 
 /// The structure for a chess position
 #[derive(Eq, PartialEq, Clone, Debug)]
@@ -18,7 +18,7 @@ pub struct Position {
 impl Position {
     /// Generates an FEN string representing the board data, active color, castling rights, and en passant target in the position.
     pub fn to_fen(&self) -> String {
-        let Position {
+        let Self {
             content,
             side,
             castling_rights,
@@ -93,6 +93,185 @@ impl Position {
         [board_data, active_color, castling_availability, en_passant_target_square].join(" ")
     }
 
+    /// Converts a `Move` to SAN, returning an error if the move is illegal.
+    pub fn move_to_san(&self, move_: Move) -> Result<String, IllegalMoveError> {
+        let legal = self.gen_non_illegal_moves();
+        let move_ = match helpers::as_legal(move_, &legal) {
+            Some(m) => m,
+            _ => return Err(IllegalMoveError),
+        };
+        let mut san = String::new();
+        let Move(src, dest, spec) = move_;
+        let Self { content, .. } = self;
+        let (src_occ, dest_occ) = (content[src], content[dest]);
+        let ((srcf, srcr), (destf, destr)) = (helpers::idx_to_sq(src), helpers::idx_to_sq(dest));
+        let new_content = self.make_move(move_).unwrap();
+        let suffix = if new_content.is_checkmate() {
+            "#"
+        } else if new_content.is_check() {
+            "+"
+        } else {
+            ""
+        };
+        let piece_type;
+        match src_occ {
+            Occupant::Piece(Piece(pt, _)) => match pt {
+                PieceType::P => {
+                    return Ok(format!(
+                        "{}{suffix}",
+                        match spec {
+                            Some(SpecialMoveType::EnPassant) => format!("{srcf}x{destf}{destr}"),
+                            _ => format!(
+                                "{}{}",
+                                match dest_occ {
+                                    Occupant::Piece(_) => format!("{srcf}x{destf}{destr}",),
+                                    Occupant::Empty => format!("{destf}{destr}"),
+                                },
+                                match spec {
+                                    Some(SpecialMoveType::Promotion(piece_type)) => format!("={}", char::from(piece_type)),
+                                    _ => String::new(),
+                                }
+                            ),
+                        },
+                    ))
+                }
+                PieceType::K => {
+                    return Ok(format!(
+                        "{}{suffix}",
+                        match spec {
+                            Some(SpecialMoveType::CastlingKingside) => "O-O".to_owned(),
+                            Some(SpecialMoveType::CastlingQueenside) => "O-O-O".to_owned(),
+                            _ => format!(
+                                "K{}{destf}{destr}",
+                                match dest_occ {
+                                    Occupant::Piece(_) => "x",
+                                    Occupant::Empty => "",
+                                }
+                            ),
+                        },
+                    ))
+                }
+                pt => {
+                    san.push(char::from(pt));
+                    piece_type = pt;
+                }
+            },
+            _ => panic!("the universe is malfunctioning"),
+        }
+        if legal
+            .iter()
+            .filter(|m| {
+                if m.1 == dest {
+                    if let Occupant::Piece(Piece(pt, _)) = content[m.0] {
+                        pt == piece_type
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            })
+            .count()
+            > 1
+        {
+            if legal
+                .iter()
+                .filter(|m| {
+                    if m.1 == dest {
+                        if let Occupant::Piece(Piece(pt, _)) = content[m.0] {
+                            pt == piece_type && helpers::squares_in_file(srcf).contains(&m.0)
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                })
+                .count()
+                > 1
+            {
+                if legal
+                    .iter()
+                    .filter(|m| {
+                        if m.1 == dest {
+                            if let Occupant::Piece(Piece(pt, _)) = content[m.0] {
+                                pt == piece_type && helpers::squares_in_rank(srcr).contains(&m.0)
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    })
+                    .count()
+                    > 1
+                {
+                    san.push(srcf);
+                }
+                san.push(srcr);
+            } else {
+                san.push(srcf);
+            }
+        }
+        Ok(format!(
+            "{san}{}{destf}{destr}{suffix}",
+            match dest_occ {
+                Occupant::Piece(_) => "x",
+                Occupant::Empty => "",
+            }
+        ))
+    }
+
+    /// Constructs a `Move` from a SAN representation, returning an error if it is invalid or illegal.
+    pub fn san_to_move(&self, san: &str) -> Result<Move, String> {
+        let san = san.replace('0', "O").replace(['+', '#'], "");
+        self.gen_non_illegal_moves()
+            .into_iter()
+            .find(|&m| self.move_to_san(m).unwrap().replace(['+', '#'], "") == san)
+            .ok_or("Invalid SAN: This SAN is either invalid or illegal in this position".to_owned())
+    }
+
+    /// Returns the position which would occur if the given move is played, returning an error if the move is illegal.
+    pub fn make_move(&self, move_: Move) -> Result<Self, IllegalMoveError> {
+        let move_ = match helpers::as_legal(move_, &self.gen_non_illegal_moves()) {
+            Some(m) => m,
+            _ => return Err(IllegalMoveError),
+        };
+        let castling_rights_idx_offset = if self.side { 0 } else { 2 };
+        let Self {
+            content,
+            mut side,
+            mut castling_rights,
+            ..
+        } = self;
+        let mut ep_target = None;
+        let Move(move_src, move_dest, ..) = move_;
+        let moved_piece = content[move_src];
+        match moved_piece {
+            Occupant::Piece(Piece(PieceType::K, _)) => (castling_rights[castling_rights_idx_offset], castling_rights[castling_rights_idx_offset + 1]) = (None, None),
+            Occupant::Piece(Piece(PieceType::P, _)) => {
+                if (std::cmp::max(move_src, move_dest) - std::cmp::min(move_src, move_dest)) == 16 {
+                    ep_target = Some(if side { move_src + 8 } else { move_src - 8 });
+                }
+            }
+            _ => (),
+        }
+        for maybe_rook in [move_src, move_dest] {
+            let maybe_right = castling_rights.iter().enumerate().find(|(_, right)| right.is_some() && right.unwrap() == maybe_rook);
+            if maybe_right.is_some() {
+                castling_rights[maybe_right.unwrap().0] = None;
+            }
+        }
+        side = !side;
+        let new_content = helpers::change_content(content, &move_, &self.castling_rights);
+        Ok(Self {
+            content: new_content,
+            side,
+            castling_rights,
+            ep_target,
+        })
+    }
+
     /// Pretty-prints the position to a string, from the perspective of the side `perspective`.
     pub fn pretty_print(&self, perspective: bool) -> String {
         let mut string = String::new();
@@ -150,7 +329,7 @@ impl Position {
 
     /// Generates the legal moves in the position, assuming the game is ongoing.
     pub fn gen_non_illegal_moves(&self) -> Vec<Move> {
-        let Position { content, side, castling_rights, .. } = self;
+        let Self { content, side, castling_rights, .. } = self;
         self.gen_pseudolegal_moves()
             .into_iter()
             .filter(|move_| {

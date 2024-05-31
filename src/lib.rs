@@ -258,6 +258,26 @@ impl Board {
         [self.position.to_fen(), self.halfmove_clock.to_string(), self.fullmove_number.to_string()].join(" ")
     }
 
+    /// Represents a `Move` in SAN, returning an error if the move is illegal.
+    pub fn move_to_san(&self, move_: Move) -> Result<String, IllegalMoveError> {
+        let move_ = helpers::as_legal(move_, &self.gen_legal_moves()).ok_or(IllegalMoveError)?;
+        self.position.move_to_san(move_)
+    }
+
+    /// Constructs a `Move` from a SAN representation, returning an error if it is invalid or illegal.
+    pub fn san_to_move(&self, san: &str) -> Result<Move, String> {
+        match self.position.san_to_move(san) {
+            Ok(m) => {
+                if self.is_legal(m) {
+                    Ok(m)
+                } else {
+                    Err("Invalid SAN: This move is illegal".to_owned())
+                }
+            }
+            e => e,
+        }
+    }
+
     /// Generates the legal moves in the position.
     pub fn gen_legal_moves(&self) -> Vec<Move> {
         if self.ongoing {
@@ -267,92 +287,50 @@ impl Board {
         }
     }
 
+    /// Checks whether a move is legal in the position.
+    pub fn is_legal(&self, move_: Move) -> bool {
+        helpers::as_legal(move_, &self.gen_legal_moves()).is_some()
+    }
+
     /// Plays on the board the given move, returning an error if the move is illegal.
     pub fn make_move(&mut self, move_: Move) -> Result<(), IllegalMoveError> {
-        let legal_moves = self.gen_legal_moves();
-        if !legal_moves.contains(&move_) {
-            return Err(IllegalMoveError);
-        }
-        let castling_rights_idx_offset = if self.position.side { 0 } else { 2 };
-        let side = self.position.side;
-        let mut castling_rights = self.position.castling_rights;
-        let mut ep_target = None;
+        let move_ = match helpers::as_legal(move_, &self.gen_legal_moves()) {
+            Some(m) => m,
+            _ => return Err(IllegalMoveError),
+        };
         let mut halfmove_clock = self.halfmove_clock;
-        let fullmove_number = self.fullmove_number + if side { 0 } else { 1 };
-        let (move_src, moved_piece) = (move_.0, self.position.content[move_.0]);
-        let (move_dest, dest_occ) = (move_.1, self.position.content[move_.1]);
-        if let Occupant::Piece(_) = dest_occ {
+        let fullmove_number = self.fullmove_number + if self.position.side { 0 } else { 1 };
+        let Move(move_src, move_dest, ..) = move_;
+        let (moved_piece, dest_occ) = (self.position.content[move_src], self.position.content[move_dest]);
+        if matches!(moved_piece, Occupant::Piece(Piece(PieceType::P, _))) || matches!(dest_occ, Occupant::Piece(_)) {
             halfmove_clock = 0;
         } else {
             halfmove_clock += 1;
         }
-        match moved_piece {
-            Occupant::Piece(Piece(PieceType::K, _)) => (castling_rights[castling_rights_idx_offset], castling_rights[castling_rights_idx_offset + 1]) = (None, None),
-            Occupant::Piece(Piece(PieceType::P, _)) => {
-                halfmove_clock = 0;
-                if (std::cmp::max(move_src, move_dest) - std::cmp::min(move_src, move_dest)) == 16 {
-                    ep_target = Some(if side { move_src + 8 } else { move_src - 8 });
-                }
-            }
-            _ => (),
-        }
-        for maybe_rook in [move_src, move_dest] {
-            let maybe_right = castling_rights.iter().enumerate().find(|(_, right)| right.is_some() && right.unwrap() == maybe_rook);
-            if maybe_right.is_some() {
-                castling_rights[maybe_right.unwrap().0] = None;
-            }
-        }
-        let side = !self.position.side;
-        let new_content = helpers::change_content(&self.position.content, &move_, &self.position.castling_rights);
-        let new_position = Position {
-            content: new_content,
-            side,
-            castling_rights,
-            ep_target,
-        };
         self.position_history.push(self.position.clone());
-        self.position = new_position;
+        self.position = self.position.make_move(move_).unwrap();
         self.move_history.push(move_);
         (self.halfmove_clock, self.fullmove_number) = (halfmove_clock, fullmove_number);
         self.check_game_over();
         Ok(())
     }
 
+    /// Attempts to parse the UCI representation of a move and play it on the board, returning an error if the move is invalid or illegal.
+    pub fn make_move_uci(&mut self, uci: &str) -> Result<(), String> {
+        let move_ = Move::from_uci(uci)?;
+        self.make_move(move_).map_err(|e| format!("{e}"))
+    }
+
+    /// Attempts to interpret the SAN representation of a move and play it on the board, returning an error if it is invalid or illegal.
+    pub fn make_move_san(&mut self, san: &str) -> Result<(), String> {
+        let move_ = self.san_to_move(san)?;
+        self.make_move(move_).map_err(|e| format!("{e}"))
+    }
+
     fn check_game_over(&mut self) {
         if self.is_fivefold_repetition() || self.is_seventy_five_move_rule() || self.is_stalemate() || self.is_insufficient_material() || self.is_checkmate() {
             self.ongoing = false;
         }
-    }
-
-    /// Attempts to parse the UCI representation of a move and play it on the board, returning an error if the move is invalid or illegal.
-    pub fn make_move_uci(&mut self, uci: &str) -> Result<(), String> {
-        let uci_len = uci.len();
-        if ![4, 5].contains(&uci_len) {
-            return Err(format!("Invalid UCI: Expected string to be 4 or 5 characters long, got {uci_len}"));
-        }
-        let from_square = (uci.chars().next().unwrap(), uci.chars().nth(1).unwrap());
-        let to_square = (uci.chars().nth(2).unwrap(), uci.chars().nth(3).unwrap());
-        let promotion = uci.chars().nth(4);
-        if !(('a'..='h').contains(&from_square.0) && from_square.1.is_ascii_digit()) {
-            return Err(format!("Invalid UCI: '{}{}' is not a valid square name", from_square.0, from_square.1));
-        }
-        if !(('a'..='h').contains(&to_square.0) && to_square.1.is_ascii_digit()) {
-            return Err(format!("Invalid UCI: '{}{}' is not a valid square name", to_square.0, to_square.1));
-        }
-        let (src, dest) = (helpers::sq_to_idx(from_square.0, from_square.1), helpers::sq_to_idx(to_square.0, to_square.1));
-        let promotion = match promotion {
-            Some(p) => Some(PieceType::try_from(p)?),
-            _ => None,
-        };
-        let move_ = self
-            .gen_legal_moves()
-            .into_iter()
-            .find(|m| (m.0, m.1) == (src, dest) && (promotion.is_some() && m.2 == Some(SpecialMoveType::Promotion(promotion.unwrap())) || promotion.is_none()));
-        if move_.is_none() {
-            return Err(format!("Illegal move: '{uci}' is an illegal move"));
-        }
-        let _ = self.make_move(move_.unwrap());
-        Ok(())
     }
 
     /// Checks whether the game is still ongoing.
@@ -561,12 +539,12 @@ impl From<PieceType> for char {
 pub struct Move(usize, usize, Option<SpecialMoveType>);
 
 impl Move {
-    /// Returns the source square of the move in the format (_file_, _rank_)
+    /// Returns the source square of the move in the format (_file_, _rank_).
     pub fn from_square(&self) -> (char, char) {
         helpers::idx_to_sq(self.0)
     }
 
-    /// Returns the destination square of the move in the format (_file_, _rank_)
+    /// Returns the destination square of the move in the format (_file_, _rank_).
     pub fn to_square(&self) -> (char, char) {
         helpers::idx_to_sq(self.1)
     }
@@ -574,6 +552,48 @@ impl Move {
     /// Returns the type of special move (castling/promotion/en passant) if this move is a special move (otherwise `None`).
     pub fn special_move_type(&self) -> Option<SpecialMoveType> {
         self.2
+    }
+
+    /// Creates a `Move` object from its UCI representation.
+    fn from_uci(uci: &str) -> Result<Self, String> {
+        let uci_len = uci.len();
+        if ![4, 5].contains(&uci_len) {
+            return Err(format!("Invalid UCI: Expected string to be 4 or 5 characters long, got {uci_len}"));
+        }
+        let from_square = (uci.chars().next().unwrap(), uci.chars().nth(1).unwrap());
+        let to_square = (uci.chars().nth(2).unwrap(), uci.chars().nth(3).unwrap());
+        let promotion = uci.chars().nth(4);
+        if !(('a'..='h').contains(&from_square.0) && ('1'..='8').contains(&from_square.1)) {
+            return Err(format!("Invalid UCI: '{}{}' is not a valid square name", from_square.0, from_square.1));
+        }
+        if !(('a'..='h').contains(&to_square.0) && ('1'..='8').contains(&to_square.1)) {
+            return Err(format!("Invalid UCI: '{}{}' is not a valid square name", to_square.0, to_square.1));
+        }
+        let (src, dest) = (helpers::sq_to_idx(from_square.0, from_square.1), helpers::sq_to_idx(to_square.0, to_square.1));
+        let promotion = match promotion {
+            Some(p) => Some(PieceType::try_from(p)?),
+            _ => None,
+        };
+        Ok(Self(
+            src,
+            dest,
+            match promotion {
+                Some(p) => Some(SpecialMoveType::Promotion(p)),
+                _ => Some(SpecialMoveType::Unclear),
+            },
+        ))
+    }
+
+    /// Returns the UCI representation of the move.
+    pub fn to_uci(&self) -> String {
+        let ((srcf, srcr), (destf, destr)) = (helpers::idx_to_sq(self.0), helpers::idx_to_sq(self.1));
+        format!(
+            "{srcf}{srcr}{destf}{destr}{}",
+            match self.2 {
+                Some(SpecialMoveType::Promotion(pt)) => char::from(pt).to_ascii_lowercase().to_string(),
+                _ => String::new(),
+            }
+        )
     }
 }
 
@@ -601,6 +621,7 @@ pub enum SpecialMoveType {
     CastlingQueenside,
     Promotion(PieceType),
     EnPassant,
+    Unclear,
 }
 
 /// The error type used to convey the illegality of a move.

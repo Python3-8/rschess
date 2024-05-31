@@ -126,3 +126,36 @@ pub fn color_complex_of(sq: usize) -> bool {
     }) % 2
         == 0
 }
+
+/// Returns a list of the indices of all the squares in a file.
+pub fn squares_in_file(file: char) -> Vec<usize> {
+    let mut vec = Vec::new();
+    let bottom = sq_to_idx(file, '1');
+    for i in 0..8 {
+        vec.push(bottom + 8 * i);
+    }
+    vec
+}
+
+/// Returns a list of the indices of all the squares on a rank.
+pub fn squares_in_rank(rank: char) -> Vec<usize> {
+    let mut vec = Vec::new();
+    let left = 8 * (rank.to_digit(10).unwrap() as usize - 1);
+    for i in 0..8 {
+        vec.push(left + i);
+    }
+    vec
+}
+
+pub fn as_legal(move_: Move, legal: &[Move]) -> Option<Move> {
+    if legal.contains(&move_) {
+        Some(move_)
+    } else if move_.2 == Some(SpecialMoveType::Unclear) {
+        match legal.iter().find(|m| (m.0, m.1) == (move_.0, move_.1) && !matches!(m.2, Some(SpecialMoveType::Promotion(_)))) {
+            Some(&m) => Some(m),
+            _ => None,
+        }
+    } else {
+        None
+    }
+}
