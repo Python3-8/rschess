@@ -1,6 +1,4 @@
-use crate::SpecialMoveType;
-
-use super::{Move, Occupant, Piece, PieceType, Position};
+use super::{Move, Occupant, Piece, PieceType, Position, SpecialMoveType};
 use std::ops::RangeBounds;
 
 /// Converts a square name in the format (<file>, <rank>) to a square index.
@@ -50,6 +48,14 @@ where
     rng.filter(|&sq| content[sq] == piece).collect()
 }
 
+/// Finds the indices of all occurrences pieces on the board in the square range `rng`.
+pub fn find_all_pieces<R>(rng: R, content: &[Occupant; 64]) -> Vec<usize>
+where
+    R: RangeBounds<usize> + Iterator<Item = usize>,
+{
+    rng.filter(|&sq| matches!(content[sq], Occupant::Piece(_))).collect()
+}
+
 /// Checks whether capturing a king is pseudolegal for the specified side in the given position.
 pub fn king_capture_pseudolegal(content: &[Occupant; 64], side: bool) -> bool {
     let enemy_king = find_king(!side, content);
@@ -73,30 +79,26 @@ pub fn find_king(color: bool, content: &[Occupant; 64]) -> usize {
 }
 
 /// Changes the board content based on the given move.
-pub fn change_content(content: &[Occupant; 64], move_: &Move) -> [Occupant; 64] {
+pub fn change_content(content: &[Occupant; 64], move_: &Move, castling_rights: &[Option<usize>]) -> [Occupant; 64] {
     let mut content = *content;
     let Move(src, dest, spec) = move_;
     (content[*src], content[*dest]) = (Occupant::Empty, content[*src]);
     match spec {
         Some(SpecialMoveType::CastlingKingside | SpecialMoveType::CastlingQueenside) => match *dest {
             6 => {
-                let rook = Piece(PieceType::R, true);
-                let krook = find_pieces(rook, src + 1..=6, &content)[0];
+                let krook = castling_rights[0].unwrap();
                 (content[krook], content[5]) = (Occupant::Empty, content[krook]);
             }
             2 => {
-                let rook = Piece(PieceType::R, true);
-                let qrook = find_pieces(rook, 0..*src, &content)[0];
+                let qrook = castling_rights[1].unwrap();
                 (content[qrook], content[3]) = (Occupant::Empty, content[qrook]);
             }
             62 => {
-                let rook = Piece(PieceType::R, false);
-                let krook = find_pieces(rook, src + 1..=62, &content)[0];
+                let krook = castling_rights[2].unwrap();
                 (content[krook], content[61]) = (Occupant::Empty, content[krook]);
             }
             58 => {
-                let rook = Piece(PieceType::R, false);
-                let qrook = find_pieces(rook, 56..*src, &content)[0];
+                let qrook = castling_rights[3].unwrap();
                 (content[qrook], content[59]) = (Occupant::Empty, content[qrook]);
             }
             _ => panic!("the universe is malfunctioning"),

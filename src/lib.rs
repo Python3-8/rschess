@@ -8,7 +8,7 @@ use std::fmt;
 use position::Position;
 
 /// The structure for a chessboard/game
-#[derive(Debug)]
+#[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Board {
     /// The position on the board
     position: Position,
@@ -261,22 +261,7 @@ impl Board {
     /// Generates the legal moves in the position.
     pub fn gen_legal_moves(&self) -> Vec<Move> {
         if self.ongoing {
-            let Position { content, side, .. } = self.position;
-            self.position
-                .gen_pseudolegal_moves()
-                .into_iter()
-                .filter(|move_| {
-                    if let Move(src, dest, Some(SpecialMoveType::CastlingKingside | SpecialMoveType::CastlingQueenside)) = move_ {
-                        for sq in *std::cmp::min(src, dest)..=*std::cmp::max(src, dest) {
-                            if self.position.controls_square(sq, !side) {
-                                return false;
-                            }
-                        }
-                        return true;
-                    }
-                    !helpers::king_capture_pseudolegal(&helpers::change_content(&content, move_), !side)
-                })
-                .collect()
+            self.position.gen_non_illegal_moves()
         } else {
             Vec::new()
         }
@@ -318,7 +303,7 @@ impl Board {
             }
         }
         let side = !self.position.side;
-        let new_content = helpers::change_content(&self.position.content, &move_);
+        let new_content = helpers::change_content(&self.position.content, &move_, &self.position.castling_rights);
         let new_position = Position {
             content: new_content,
             side,
@@ -438,7 +423,7 @@ impl Board {
 
     /// Checks whether the game is drawn by stalemate. Use [`Board::stalemated_side`] to know which side is in stalemate.
     pub fn is_stalemate(&self) -> bool {
-        !self.is_check() && self.gen_legal_moves().is_empty()
+        self.position.is_stalemate()
     }
 
     /// Checks whether the game is drawn by insufficient material.
@@ -457,46 +442,37 @@ impl Board {
 
     /// Checks whether any side is in check (a checkmate is also considered a check). Use [`Board::checked_side`] to know which side is in check.
     pub fn is_check(&self) -> bool {
-        self.checked_side().is_some()
+        self.position.is_check()
     }
 
     /// Checks whether any side is in checkmate. Use [`Board::checkmated_side`] to know which side is in checkmate.
     pub fn is_checkmate(&self) -> bool {
-        self.is_check() && self.gen_legal_moves().is_empty()
+        self.position.is_checkmate()
     }
 
     /// Returns an optional boolean representing the side in stalemate (`None` if neither side is in stalemate).
     pub fn stalemated_side(&self) -> Option<bool> {
-        if self.is_stalemate() {
-            Some(self.position.side)
-        } else {
-            None
-        }
+        self.position.stalemated_side()
     }
 
     /// Returns an optional boolean representing the side in check (`None` if neither side is in check).
     pub fn checked_side(&self) -> Option<bool> {
-        if helpers::king_capture_pseudolegal(&self.position.content, false) {
-            Some(true)
-        } else if helpers::king_capture_pseudolegal(&self.position.content, true) {
-            Some(false)
-        } else {
-            None
-        }
+        self.position.checked_side()
     }
 
     /// Returns an optional boolean representing the side in checkmate (`None` if neither side is in checkmate).
     pub fn checkmated_side(&self) -> Option<bool> {
-        if self.is_checkmate() {
-            Some(self.position.side)
-        } else {
-            None
-        }
+        self.position.checkmated_side()
     }
 
-    /// Pretty-prints the position to a string.
-    pub fn pretty_print(&self) -> String {
-        self.position.pretty_print()
+    /// Pretty-prints the position to a string, from the perspective of the side `perspective` (`true` for white, `false` for black).
+    pub fn pretty_print(&self, perspective: bool) -> String {
+        self.position.pretty_print(perspective)
+    }
+
+    /// Returns which side's turn it is to move (`true` for white, `false` for black).
+    pub fn side_to_move(&self) -> bool {
+        self.position.side
     }
 }
 

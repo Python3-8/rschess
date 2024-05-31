@@ -16,6 +16,7 @@ pub struct Position {
 }
 
 impl Position {
+    /// Generates an FEN string representing the board data, active color, castling rights, and en passant target in the position.
     pub fn to_fen(&self) -> String {
         let Position {
             content,
@@ -92,7 +93,8 @@ impl Position {
         [board_data, active_color, castling_availability, en_passant_target_square].join(" ")
     }
 
-    pub fn pretty_print(&self) -> String {
+    /// Pretty-prints the position to a string, from the perspective of the side `perspective`.
+    pub fn pretty_print(&self, perspective: bool) -> String {
         let mut string = String::new();
         let codepoints = HashMap::from([
             (PieceType::K, 0x2654),
@@ -102,29 +104,114 @@ impl Position {
             (PieceType::N, 0x2658),
             (PieceType::P, 0x2659),
         ]);
-        for (ranki, rank) in self.content.chunks(8).rev().enumerate() {
-            string += &format!("{} |", 8 - ranki);
-            for (sqi, occupant) in rank.iter().enumerate() {
-                string += &format!(
-                    " {} ",
-                    match occupant {
-                        Occupant::Piece(Piece(t, c)) => char::from_u32((codepoints.get(t).unwrap() + if *c { 0 } else { 6 }) as u32).unwrap(),
-                        Occupant::Empty => ' ',
+        if perspective {
+            for (ranki, rank) in self.content.chunks(8).rev().enumerate() {
+                string += &format!("{} |", 8 - ranki);
+                for (sqi, occupant) in rank.iter().enumerate() {
+                    string += &format!(
+                        " {} ",
+                        match occupant {
+                            Occupant::Piece(Piece(t, c)) => char::from_u32((codepoints.get(t).unwrap() + if *c { 0 } else { 6 }) as u32).unwrap(),
+                            Occupant::Empty => ' ',
+                        }
+                    );
+                    if sqi != 7 {
+                        string.push('|');
                     }
-                );
-                if sqi != 7 {
-                    string.push('|');
                 }
+                string.push('\n');
+                string += &"⎯".repeat(33);
+                string.push('\n');
             }
-            string.push('\n');
-            string += &"⎯".repeat(33);
-            string.push('\n');
+            string += "  | a | b | c | d | e | f | g | h";
+        } else {
+            for (ranki, rank) in self.content.chunks(8).enumerate() {
+                string += &format!("{} |", ranki + 1);
+                for (sqi, occupant) in rank.iter().rev().enumerate() {
+                    string += &format!(
+                        " {} ",
+                        match occupant {
+                            Occupant::Piece(Piece(t, c)) => char::from_u32((codepoints.get(t).unwrap() + if *c { 0 } else { 6 }) as u32).unwrap(),
+                            Occupant::Empty => ' ',
+                        }
+                    );
+                    if sqi != 7 {
+                        string.push('|');
+                    }
+                }
+                string.push('\n');
+                string += &"⎯".repeat(33);
+                string.push('\n');
+            }
+            string += "  | h | g | f | e | d | c | d | a";
         }
-        string += "  | a | b | c | d | e | f | g | h";
         string
     }
 
-    /// Generates pseudolegal moves in the position.
+    /// Generates the legal moves in the position, assuming the game is ongoing.
+    pub fn gen_non_illegal_moves(&self) -> Vec<Move> {
+        let Position { content, side, castling_rights, .. } = self;
+        self.gen_pseudolegal_moves()
+            .into_iter()
+            .filter(|move_| {
+                if let Move(src, dest, Some(SpecialMoveType::CastlingKingside | SpecialMoveType::CastlingQueenside)) = move_ {
+                    for sq in *std::cmp::min(src, dest)..=*std::cmp::max(src, dest) {
+                        if self.controls_square(sq, !side) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+                !helpers::king_capture_pseudolegal(&helpers::change_content(content, move_, castling_rights), !side)
+            })
+            .collect()
+    }
+
+    /// Checks whether the game is drawn by stalemate. Use [`Board::stalemated_side`] to know which side is in stalemate.
+    pub fn is_stalemate(&self) -> bool {
+        !self.is_check() && self.gen_non_illegal_moves().is_empty()
+    }
+
+    /// Checks whether any side is in check (a checkmate is also considered a check). Use [`Board::checked_side`] to know which side is in check.
+    pub fn is_check(&self) -> bool {
+        self.checked_side().is_some()
+    }
+
+    /// Checks whether any side is in checkmate. Use [`Board::checkmated_side`] to know which side is in checkmate.
+    pub fn is_checkmate(&self) -> bool {
+        self.is_check() && self.gen_non_illegal_moves().is_empty()
+    }
+
+    /// Returns an optional boolean representing the side in stalemate (`None` if neither side is in stalemate).
+    pub fn stalemated_side(&self) -> Option<bool> {
+        if self.is_stalemate() {
+            Some(self.side)
+        } else {
+            None
+        }
+    }
+
+    /// Returns an optional boolean representing the side in check (`None` if neither side is in check).
+    pub fn checked_side(&self) -> Option<bool> {
+        if helpers::king_capture_pseudolegal(&self.content, false) {
+            Some(true)
+        } else if helpers::king_capture_pseudolegal(&self.content, true) {
+            Some(false)
+        } else {
+            None
+        }
+    }
+
+    /// Returns an optional boolean representing the side in checkmate (`None` if neither side is in checkmate).
+    pub fn checkmated_side(&self) -> Option<bool> {
+        if self.is_checkmate() {
+            Some(self.side)
+        } else {
+            None
+        }
+    }
+
+    /// Generates the pseudolegal moves in the position.
     pub fn gen_pseudolegal_moves(&self) -> Vec<Move> {
         let Self {
             content,
@@ -156,11 +243,28 @@ impl Position {
                         pseudolegal_moves.extend(possible_dests.into_iter().map(|d| Move(i, d, None)));
                         let castling_rights_idx_offset = if *side { 0 } else { 2 };
                         let (oo_sq, ooo_sq) = if *side { (6, 2) } else { (62, 58) };
-                        if castling_rights[castling_rights_idx_offset].is_some() && helpers::count_pieces(i + 1..=oo_sq, content) <= 1 {
-                            pseudolegal_moves.push(Move(i, oo_sq, Some(SpecialMoveType::CastlingKingside)));
+                        let (kingside, queenside) = (castling_rights[castling_rights_idx_offset], castling_rights[castling_rights_idx_offset + 1]);
+                        if let Some(r) = kingside {
+                            match helpers::count_pieces(i + 1..=oo_sq, content) {
+                                0 => pseudolegal_moves.push(Move(i, oo_sq, Some(SpecialMoveType::CastlingKingside))),
+                                1 => {
+                                    if helpers::find_all_pieces(i + 1..=oo_sq, content)[0] == r {
+                                        pseudolegal_moves.push(Move(i, oo_sq, Some(SpecialMoveType::CastlingKingside)))
+                                    }
+                                }
+                                _ => (),
+                            }
                         }
-                        if castling_rights[castling_rights_idx_offset + 1].is_some() && helpers::count_pieces(ooo_sq..i, content) <= 1 {
-                            pseudolegal_moves.push(Move(i, ooo_sq, Some(SpecialMoveType::CastlingQueenside)));
+                        if let Some(r) = queenside {
+                            match helpers::count_pieces(ooo_sq..i, content) {
+                                0 => pseudolegal_moves.push(Move(i, ooo_sq, Some(SpecialMoveType::CastlingQueenside))),
+                                1 => {
+                                    if helpers::find_all_pieces(ooo_sq..i, content)[0] == r {
+                                        pseudolegal_moves.push(Move(i, ooo_sq, Some(SpecialMoveType::CastlingQueenside)))
+                                    }
+                                }
+                                _ => (),
+                            }
                         }
                     }
                     PieceType::N => {
