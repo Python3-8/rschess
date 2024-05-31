@@ -2,6 +2,7 @@
 
 # Aim
 rschess is yet another chess library for Rust, with the aim of being as feature-rich as possible. At the moment, speed optimizations aren't my first priority, but I might get there someday. There are surprisingly very few Rust crates that offer enough features for any application related to chess. With rschess I aim to create a library that boasts features of:
+* legal move generation
 * parsing/generating FEN and PGN
 * move history
 * board status (ongoing/over, checkmate, types of draws including the rare fivefold repetition and the seventy-five-move rule)
@@ -10,6 +11,7 @@ rschess is yet another chess library for Rust, with the aim of being as feature-
 
 # Progress
 As of now (May 31, 2024) rschess has:
+* legal move generation
 * parsing/generating FEN
 * parsing UCI
 * move history
