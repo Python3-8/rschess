@@ -1,11 +1,59 @@
-//! rschess is yet another chess library for Rust, with the aim to be as feature-rich as possible. It is still IN DEVELOPMENT, and NOT FIT FOR USE.
-
+//! A Rust chess library with the aim to be as feature-rich as possible
+//! # Examples
+//! ```
+//! use rschess::{Board, Move, GameResult};
+//!
+//! let mut board = Board::default();
+//! assert_eq!(board.to_fen(), "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+//! assert!(board.is_ongoing()); // the game is ongoing
+//! assert!(board.side_to_move()); // white's turn to move
+//! board.make_move_uci("e2e4").unwrap(); // plays e2 to e4, i.e. 1. e4
+//! assert!(!board.side_to_move()); // black's turn to move
+//! board.make_move_san("e5").unwrap(); // plays 1... e5
+//! assert!(board.is_legal(board.san_to_move("f4").unwrap())); // confirms that 2. f4 is legal
+//! assert!(board.is_legal(Move::from_uci("d2d4").unwrap())); // confirms that d2 to d4, i.e. 2. d4 is legal
+//! assert!(board.san_to_move("Ne4").is_err()); // confirms that 2. Ne4 is invalid in this position
+//! assert!(!board.is_legal(Move::from_uci("e1g1").unwrap())); // confirms that e1 to g1, i.e. 2. O-O is invalid
+//! assert_eq!(board.halfmove_clock(), 0); // confirms that the halfmove clock has been reset (since the last move was a pawn move)
+//! board.make_move_san("Nf3").unwrap(); // plays 2. Nf3
+//! assert_eq!(board.halfmove_clock(), 1); // confirms that the halfmove clock has incremented (since 2. Nf3 was not a pawn push or capture)
+//! board.make_move_san("f6").unwrap(); // plays 2... f6
+//! board.make_move_san("Nxe5").unwrap(); // plays 3. Nxe5
+//! assert_eq!(board.halfmove_clock(), 0); // confirms that the halfmove clock has been reset (since the last move was a capture)
+//! board.make_move_san("fxe5").unwrap(); // plays 3... fxe5
+//! board.make_move_san("Qh5+").unwrap(); // plays 4. Qh5+
+//! assert!(board.is_check()); // confirms that a side is in check
+//! assert_eq!(board.checked_side(), Some(false)); // confirms that black is the side in check
+//! assert_eq!(board.gen_legal_moves().len(), 2); // confirms that there are only two legal moves (4... g6 and 4... Ke7)
+//! board.make_move_uci("e8e7").unwrap(); // plays e8 to e7, i.e. 4... Ke7
+//! assert_eq!(board.halfmove_clock(), 2); // confirms that the halfmove clock has incremented twice (since two halfmoves have been played without a pawn push or capture)
+//! board.make_move_uci("h5e5").unwrap(); // plays h5 to e5, i.e. 5. Qxe5+
+//! assert_eq!(board.halfmove_clock(), 0); // confirms that the halfmove clock has been reset (since the last move was a capture)
+//! board.make_move_san("Kf7").unwrap(); // plays 5... Kf7
+//! board.make_move_san("Bc4+").unwrap(); // plays 6. Bc4+
+//! board.make_move_san("Kg6").unwrap(); // plays 6... Kg6
+//! board.make_move_san("Qf5+").unwrap(); // plays 7. Qf5+
+//! assert_eq!(board.gen_legal_moves().len(), 1); // confirms that there is only one legal move
+//! board.make_move_san("Kh6").unwrap(); // plays 7... Kh6
+//! board.make_move_san("d4+").unwrap(); // plays 8. d4+ (discovered check by the bishop on c1)
+//! assert!(board.is_check()); // confirms that a side is in check
+//! board.make_move_san("g5").unwrap(); // plays 8... g5
+//! board.make_move_san("h4").unwrap(); // plays 9. h4
+//! board.make_move_san("Bg7").unwrap(); // plays 9... Bg7
+//! board.make_move_san("hxg5#").unwrap(); // plays 10. hxg5#
+//! assert!(board.is_game_over()); // confirms that the game is over
+//! assert!(board.is_checkmate()); // confirms that a side has been checkmated
+//! assert_eq!(board.game_result(), Some(GameResult::WhiteWins)); // confirms that white has won
+//! assert_eq!(board.fullmove_number(), 10); // confirms that the current fullmove number is 10
+//! assert_eq!(board.gen_legal_moves().len(), 0); // confirms that there are no legal moves because the game is over
+//! ```
 mod helpers;
+mod pgn;
 mod position;
 
-use std::fmt;
-
+use pgn::Pgn;
 use position::Position;
+use std::fmt;
 
 /// The structure for a chessboard/game
 #[derive(Eq, PartialEq, Clone, Debug)]
@@ -452,6 +500,17 @@ impl Board {
     pub fn side_to_move(&self) -> bool {
         self.position.side
     }
+
+    /// Returns the `Occupant` of a square, or an error if the square name is invalid.
+    pub fn occupant_of_square(&self, file: char, rank: char) -> Result<Occupant, String> {
+        if !('a'..'h').contains(&file) {
+            return Err(format!("Invalid file name: {file}"));
+        }
+        if !('1'..'8').contains(&rank) {
+            return Err(format!("Invalid rank: {rank}"));
+        }
+        Ok(self.position.content[helpers::sq_to_idx(file, rank)])
+    }
 }
 
 impl Default for Board {
@@ -463,14 +522,14 @@ impl Default for Board {
 
 /// Represents the occupant of a square.
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-enum Occupant {
+pub enum Occupant {
     Piece(Piece),
     Empty,
 }
 
-/// Represents a piece.
+/// Represents a piece in the format (_piece type_, _color_).
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-struct Piece(PieceType, bool);
+pub struct Piece(PieceType, bool);
 
 impl TryFrom<char> for Piece {
     type Error = String;
@@ -555,7 +614,7 @@ impl Move {
     }
 
     /// Creates a `Move` object from its UCI representation.
-    fn from_uci(uci: &str) -> Result<Self, String> {
+    pub fn from_uci(uci: &str) -> Result<Self, String> {
         let uci_len = uci.len();
         if ![4, 5].contains(&uci_len) {
             return Err(format!("Invalid UCI: Expected string to be 4 or 5 characters long, got {uci_len}"));

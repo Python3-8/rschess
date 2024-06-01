@@ -1,6 +1,6 @@
 [package]
 name = "rschess"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 description = "A Rust chess library with the aim to be as feature-rich as possible"
 repository = "https://github.com/Python3-8/rschess"
@@ -8,3 +8,4 @@ keywords = ["chess", "pgn", "fen", "uci", "san"]
 license = "MIT"
 
 [dependencies]
+regex = "1.10.4"

@@ -1,5 +1,5 @@
 use super::helpers;
-use super::{Board, Move, PieceType, SpecialMoveType};
+use super::{Board, Move, Pgn, PieceType, SpecialMoveType};
 
 #[test]
 fn default_board() {
@@ -300,4 +300,11 @@ fn valid_make_move_san() {
     board.make_move_san("e6").unwrap();
     board.make_move_san("Nge2").unwrap();
     println!("{}", board.pretty_print(false));
+}
+
+#[test]
+#[ignore]
+fn pgn_tokenize() {
+    let pgn_str = include_str!("../test.pgn");
+    Pgn::parse(pgn_str).unwrap();
 }
