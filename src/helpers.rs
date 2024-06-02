@@ -1,4 +1,4 @@
-use super::{Move, Piece, PieceType, Position, SpecialMoveType};
+use super::{Color, Move, Piece, PieceType, Position, SpecialMoveType};
 use std::ops::RangeBounds;
 
 /// Converts a square name in the format (<file>, <rank>) to a square index.
@@ -57,7 +57,7 @@ where
 }
 
 /// Checks whether capturing a king is pseudolegal for the specified side in the given position.
-pub fn king_capture_pseudolegal(content: &[Option<Piece>; 64], side: bool) -> bool {
+pub fn king_capture_pseudolegal(content: &[Option<Piece>; 64], side: Color) -> bool {
     let enemy_king = find_king(!side, content);
     Position {
         content: *content,
@@ -69,7 +69,7 @@ pub fn king_capture_pseudolegal(content: &[Option<Piece>; 64], side: bool) -> bo
 }
 
 /// Returns the square index of the king of color `color`.
-pub fn find_king(color: bool, content: &[Option<Piece>; 64]) -> usize {
+pub fn find_king(color: Color, content: &[Option<Piece>; 64]) -> usize {
     content
         .iter()
         .enumerate()

@@ -6,9 +6,9 @@
 //! let mut board = Board::default();
 //! assert_eq!(board.to_fen(), "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
 //! assert!(board.is_ongoing()); // the game is ongoing
-//! assert_eq!(board.side_to_move(), Color::White); // white's turn to move
+//! assert!(board.side_to_move().is_white()); // white's turn to move
 //! board.make_move_uci("e2e4").unwrap(); // plays e2 to e4, i.e. 1. e4
-//! assert_eq!(board.side_to_move(), Color::Black); // black's turn to move
+//! assert!(board.side_to_move().is_black()); // black's turn to move
 //! board.make_move_san("e5").unwrap(); // plays 1... e5
 //! assert!(board.is_legal(board.san_to_move("f4").unwrap())); // confirms that 2. f4 is legal
 //! assert!(board.is_legal(Move::from_uci("d2d4").unwrap())); // confirms that d2 to d4, i.e. 2. d4 is legal
@@ -53,7 +53,7 @@ mod position;
 
 use pgn::Pgn;
 use position::Position;
-use std::fmt;
+use std::{fmt, ops::Not};
 
 /// The structure for a chessboard/game
 #[derive(Eq, PartialEq, Clone, Debug)]
@@ -117,14 +117,14 @@ impl Board {
                     content[ptr] = match piece_char.try_into() {
                         Ok(piece) => {
                             match piece {
-                                Piece(PieceType::K, true) => {
+                                Piece(PieceType::K, Color::White) => {
                                     if wk_seen {
                                         return Err("Invalid FEN: white cannot have more than one king".to_owned());
                                     }
                                     wk_seen = true;
                                     wk_pos = ptr;
                                 }
-                                Piece(PieceType::K, false) => {
+                                Piece(PieceType::K, Color::Black) => {
                                     if bk_seen {
                                         return Err("Invalid FEN: black cannot have more than one king".to_owned());
                                     }
@@ -155,9 +155,8 @@ impl Board {
             return Err("Invalid FEN: a valid chess position must have one white king and one black king".to_owned());
         }
         let turn = fields[1];
-        let side = match turn {
-            "w" => true,
-            "b" => false,
+        let side = match Color::try_from(turn) {
+            Ok(c) => c,
             _ => return Err(format!("Invalid FEN: Expected second field (side to move) to be 'w' or 'b', got '{turn}'")),
         };
         if helpers::king_capture_pseudolegal(&content, side) {
@@ -215,31 +214,31 @@ impl Board {
             }
         }
         let count_rooks = |rng, color| helpers::count_piece(rng, Piece(PieceType::R, color), &content);
-        if castling_rights_old[0] && count_rooks(wk_pos + 1..8, true) != 1 {
+        if castling_rights_old[0] && count_rooks(wk_pos + 1..8, Color::White) != 1 {
             return Err("Invalid FEN: White must have exactly one king's rook to have kingside castling rights".to_owned());
         }
-        if castling_rights_old[1] && count_rooks(0..wk_pos, true) != 1 {
+        if castling_rights_old[1] && count_rooks(0..wk_pos, Color::White) != 1 {
             return Err("Invalid FEN: White must have exactly one queen's rook to have queenside castling rights".to_owned());
         }
-        if castling_rights_old[2] && count_rooks(bk_pos + 1..64, false) != 1 {
+        if castling_rights_old[2] && count_rooks(bk_pos + 1..64, Color::Black) != 1 {
             return Err("Invalid FEN: Black must have exactly one king's rook to have kingside castling rights".to_owned());
         }
-        if castling_rights_old[3] && count_rooks(56..bk_pos, false) != 1 {
+        if castling_rights_old[3] && count_rooks(56..bk_pos, Color::Black) != 1 {
             return Err("Invalid FEN: Black must have exactly one queen's rook to have queenside castling rights".to_owned());
         }
         let find_rook = |rng, color| helpers::find_pieces(Piece(PieceType::R, color), rng, &content)[0];
         let mut castling_rights = [None; 4];
         if castling_rights_old[0] {
-            castling_rights[0] = Some(find_rook(wk_pos + 1..8, true));
+            castling_rights[0] = Some(find_rook(wk_pos + 1..8, Color::White));
         }
         if castling_rights_old[1] {
-            castling_rights[1] = Some(find_rook(0..wk_pos, true));
+            castling_rights[1] = Some(find_rook(0..wk_pos, Color::White));
         }
         if castling_rights_old[2] {
-            castling_rights[2] = Some(find_rook(bk_pos + 1..64, false));
+            castling_rights[2] = Some(find_rook(bk_pos + 1..64, Color::Black));
         }
         if castling_rights_old[3] {
-            castling_rights[3] = Some(find_rook(56..bk_pos, false));
+            castling_rights[3] = Some(find_rook(56..bk_pos, Color::Black));
         }
         let ep = fields[3];
         let len_ep = ep.len();
@@ -347,7 +346,7 @@ impl Board {
             _ => return Err(IllegalMoveError),
         };
         let mut halfmove_clock = self.halfmove_clock;
-        let fullmove_number = self.fullmove_number + if self.position.side { 0 } else { 1 };
+        let fullmove_number = self.fullmove_number + if self.position.side.is_black() { 1 } else { 0 };
         let Move(move_src, move_dest, ..) = move_;
         let (moved_piece, dest_occ) = (self.position.content[move_src], self.position.content[move_dest]);
         if matches!(moved_piece, Some(Piece(PieceType::P, _))) || dest_occ.is_some() {
@@ -396,11 +395,11 @@ impl Board {
         if self.ongoing {
             None
         } else {
-            Some(match self.position.checkmated_side() {
-                Some(false) => GameResult::WhiteWins,
-                Some(true) => GameResult::BlackWins,
-                None => match self.position.stalemated_side() {
-                    Some(s) => GameResult::Draw(DrawType::Stalemate(s.into())),
+            Some(match self.checkmated_side() {
+                Some(Color::Black) => GameResult::WhiteWins,
+                Some(Color::White) => GameResult::BlackWins,
+                None => match self.stalemated_side() {
+                    Some(s) => GameResult::Draw(DrawType::Stalemate(s)),
                     None => {
                         if self.is_fivefold_repetition() {
                             GameResult::Draw(DrawType::FivefoldRepetition)
@@ -478,27 +477,27 @@ impl Board {
 
     /// Returns an optional `Color` representing the side in stalemate (`None` if neither side is in stalemate).
     pub fn stalemated_side(&self) -> Option<Color> {
-        self.position.stalemated_side().map(|s| s.into())
+        self.position.stalemated_side()
     }
 
     /// Returns an optional `Color` representing the side in check (`None` if neither side is in check).
     pub fn checked_side(&self) -> Option<Color> {
-        self.position.checked_side().map(|s| s.into())
+        self.position.checked_side()
     }
 
     /// Returns an optional `Color` representing the side in checkmate (`None` if neither side is in checkmate).
     pub fn checkmated_side(&self) -> Option<Color> {
-        self.position.checkmated_side().map(|s| s.into())
+        self.position.checkmated_side()
     }
 
     /// Pretty-prints the position to a string, from the perspective of the side `perspective`.
     pub fn pretty_print(&self, perspective: Color) -> String {
-        self.position.pretty_print(perspective.into())
+        self.position.pretty_print(perspective)
     }
 
     /// Returns which side's turn it is to move.
     pub fn side_to_move(&self) -> Color {
-        self.position.side.into()
+        self.position.side
     }
 
     /// Returns the occupant of a square, or an error if the square name is invalid.
@@ -522,7 +521,7 @@ impl Default for Board {
 
 /// Represents a piece in the format (_piece type_, _color_).
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-pub struct Piece(PieceType, bool);
+pub struct Piece(PieceType, Color);
 
 impl Piece {
     /// Returns the type of piece.
@@ -532,7 +531,7 @@ impl Piece {
 
     /// Returns the color of the piece.
     pub fn color(&self) -> Color {
-        self.1.into()
+        self.1
     }
 }
 
@@ -540,17 +539,16 @@ impl TryFrom<char> for Piece {
     type Error = String;
 
     fn try_from(value: char) -> Result<Self, Self::Error> {
-        Ok(Self(PieceType::try_from(value)?, value.is_ascii_uppercase()))
+        Ok(Self(PieceType::try_from(value)?, if value.is_ascii_uppercase() { Color::White } else { Color::Black }))
     }
 }
 
 impl From<Piece> for char {
     fn from(piece: Piece) -> char {
         let ch = piece.0.into();
-        if piece.1 {
-            ch
-        } else {
-            ch.to_ascii_lowercase()
+        match piece.1 {
+            Color::White => ch,
+            Color::Black => ch.to_ascii_lowercase(),
         }
     }
 }
@@ -685,19 +683,47 @@ pub enum Color {
     Black,
 }
 
-impl From<bool> for Color {
-    fn from(color: bool) -> Color {
-        if color {
-            Self::White
-        } else {
-            Self::Black
+impl Color {
+    /// Checks if the color is white.
+    pub fn is_white(&self) -> bool {
+        matches!(self, Self::White)
+    }
+
+    /// Checks if the color is black.
+    pub fn is_black(&self) -> bool {
+        matches!(self, Self::Black)
+    }
+}
+
+impl TryFrom<&str> for Color {
+    type Error = String;
+
+    fn try_from(string: &str) -> Result<Self, String> {
+        match string {
+            "w" => Ok(Self::White),
+            "b" => Ok(Self::Black),
+            _ => Err(format!("Color character must be 'w' or 'b', got '{string}'")),
         }
     }
 }
 
-impl From<Color> for bool {
-    fn from(color: Color) -> bool {
-        matches!(color, Color::White)
+impl From<Color> for char {
+    fn from(c: Color) -> char {
+        match c {
+            Color::White => 'w',
+            Color::Black => 'b',
+        }
+    }
+}
+
+impl Not for Color {
+    type Output = Self;
+
+    fn not(self) -> Self {
+        match self {
+            Self::White => Self::Black,
+            Self::Black => Self::White,
+        }
     }
 }
 

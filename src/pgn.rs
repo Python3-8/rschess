@@ -46,8 +46,8 @@ impl Token {
     /// Attempts to convert part of a PGN text into a `Token`, returning `None` if not possible.
     fn from_str(string: &str) -> Option<Token> {
         let tag_pair_regex = Regex::new(r#"\[(?<name>[A-Za-z]+) *(?<value>"((\\\\)|(\\")|[^"\\])*")\]"#).unwrap();
-        let fullmove_san_regex = Regex::new(r"(?<move_number>\d+)\. *(?<white_move>(O-O(-O)?)|(0-0(-0)?)|([A-Za-z][a-h1-8]*x?[a-h][1-8](=Q|R|B|N)?)\+?) (?<black_move>(O-O(-O)?)|(0-0(-0)?)|([A-Za-z][a-h1-8]*x?[a-h]?[1-8](=Q|R|B|N)?)[+#]?)").unwrap();
-        let halfmove_san_regex = Regex::new(r"(?<move_number>\d+)(?<dots>\.(\.{2})?) *(?<halfmove>(O-O(-O)?)|(0-0(-0)?)|([A-Za-z][a-h1-8]*x?[a-h][1-8](=Q|R|B|N)?)[+#]?)").unwrap();
+        let fullmove_san_regex = Regex::new(r"(?<move_number>\d+)\. *(?<white_move>((O-O(-O)?)|(0-0(-0)?)|([a-h]((x[a-h][1-8])|[1-8]))|([QRBN](([a-h][1-8]x?[a-h][1-8])|([1-8]x?[a-h][1-8])|([a-h]x?[a-h][1-8])|(x?[a-h][1-8])))|(Kx?[a-h][1-8]))\+?) (?<black_move>((O-O(-O)?)|(0-0(-0)?)|([a-h]((x[a-h][1-8])|[1-8]))|([QRBN](([a-h][1-8]x?[a-h][1-8])|([1-8]x?[a-h][1-8])|([a-h]x?[a-h][1-8])|(x?[a-h][1-8])))|(Kx?[a-h][1-8]))[+#]?)").unwrap();
+        let halfmove_san_regex = Regex::new(r"(?<move_number>\d+)(?<dots>\.(\.{2})?) *(?<halfmove>((O-O(-O)?)|(0-0(-0)?)|([a-h]((x[a-h][1-8])|[1-8]))|([QRBN](([a-h][1-8]x?[a-h][1-8])|([1-8]x?[a-h][1-8])|([a-h]x?[a-h][1-8])|(x?[a-h][1-8])))|(Kx?[a-h][1-8]))[+#]?)").unwrap();
         let result_regex = Regex::new(r#"[^"](?<white_score>0|1\/2|1)-(?<black_score>0|1\/2|1)[^"]?"#).unwrap();
         if let Some(caps) = tag_pair_regex.captures(string) {
             return Some(Token::TagPair(caps["name"].to_string(), caps["value"].to_string()));

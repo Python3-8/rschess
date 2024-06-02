@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::{helpers, IllegalMoveError, Move, Piece, PieceType, SpecialMoveType};
+use super::{helpers, Color, IllegalMoveError, Move, Piece, PieceType, SpecialMoveType};
 
 /// The structure for a chess position
 #[derive(Eq, PartialEq, Clone, Debug)]
@@ -8,7 +8,7 @@ pub struct Position {
     /// The board content; each square is represented by a number 0..64 where a1 is 0 and h8 is 63
     pub content: [Option<Piece>; 64],
     /// The side to move; white is `true` and black is `false`
-    pub side: bool,
+    pub side: Color,
     /// The indices of rook locations representing castling rights for both sides in the format [K, Q, k, q]
     pub castling_rights: [Option<usize>; 4],
     /// The index of the en passant target square, 0..64
@@ -48,33 +48,33 @@ impl Position {
             rankstrs.push(rankstr);
         }
         let board_data = rankstrs.join("/");
-        let active_color = if *side { "w".to_owned() } else { "b".to_owned() };
+        let active_color = char::from(*side).to_string();
         let mut castling_availability = String::new();
         let count_rooks = |rng, color| helpers::count_piece(rng, Piece(PieceType::R, color), content);
-        let (wk, bk) = (helpers::find_king(true, content), helpers::find_king(false, content));
+        let (wk, bk) = (helpers::find_king(Color::White, content), helpers::find_king(Color::Black, content));
         if castling_rights[0].is_some() {
-            castling_availability.push(if count_rooks(wk + 1..8, true) == 1 {
+            castling_availability.push(if count_rooks(wk + 1..8, Color::White) == 1 {
                 'K'
             } else {
                 helpers::idx_to_sq(castling_rights[0].unwrap()).0.to_ascii_uppercase()
             });
         }
         if castling_rights[1].is_some() {
-            castling_availability.push(if count_rooks(0..wk, true) == 1 {
+            castling_availability.push(if count_rooks(0..wk, Color::White) == 1 {
                 'Q'
             } else {
                 helpers::idx_to_sq(castling_rights[1].unwrap()).0.to_ascii_uppercase()
             });
         }
         if castling_rights[2].is_some() {
-            castling_availability.push(if count_rooks(bk + 1..64, false) == 1 {
+            castling_availability.push(if count_rooks(bk + 1..64, Color::Black) == 1 {
                 'k'
             } else {
                 helpers::idx_to_sq(castling_rights[2].unwrap()).0
             });
         }
         if castling_rights[3].is_some() {
-            castling_availability.push(if count_rooks(56..bk, false) == 1 {
+            castling_availability.push(if count_rooks(56..bk, Color::Black) == 1 {
                 'q'
             } else {
                 helpers::idx_to_sq(castling_rights[2].unwrap()).0
@@ -237,7 +237,7 @@ impl Position {
             Some(m) => m,
             _ => return Err(IllegalMoveError),
         };
-        let castling_rights_idx_offset = if self.side { 0 } else { 2 };
+        let castling_rights_idx_offset = if self.side.is_white() { 0 } else { 2 };
         let Self {
             content,
             mut side,
@@ -251,7 +251,7 @@ impl Position {
             Some(Piece(PieceType::K, _)) => (castling_rights[castling_rights_idx_offset], castling_rights[castling_rights_idx_offset + 1]) = (None, None),
             Some(Piece(PieceType::P, _)) => {
                 if (std::cmp::max(move_src, move_dest) - std::cmp::min(move_src, move_dest)) == 16 {
-                    ep_target = Some(if side { move_src + 8 } else { move_src - 8 });
+                    ep_target = Some(if side.is_white() { move_src + 8 } else { move_src - 8 });
                 }
             }
             _ => (),
@@ -273,7 +273,7 @@ impl Position {
     }
 
     /// Pretty-prints the position to a string, from the perspective of the side `perspective`.
-    pub fn pretty_print(&self, perspective: bool) -> String {
+    pub fn pretty_print(&self, perspective: Color) -> String {
         let mut string = String::new();
         let codepoints = HashMap::from([
             (PieceType::K, 0x2654),
@@ -283,14 +283,14 @@ impl Position {
             (PieceType::N, 0x2658),
             (PieceType::P, 0x2659),
         ]);
-        if perspective {
+        if perspective.is_white() {
             for (ranki, rank) in self.content.chunks(8).rev().enumerate() {
                 string += &format!("{} |", 8 - ranki);
                 for (sqi, occupant) in rank.iter().enumerate() {
                     string += &format!(
                         " {} ",
                         match occupant {
-                            Some(Piece(t, c)) => char::from_u32((codepoints.get(t).unwrap() + if *c { 0 } else { 6 }) as u32).unwrap(),
+                            Some(Piece(t, c)) => char::from_u32((codepoints.get(t).unwrap() + if c.is_white() { 0 } else { 6 }) as u32).unwrap(),
                             None => ' ',
                         }
                     );
@@ -310,7 +310,7 @@ impl Position {
                     string += &format!(
                         " {} ",
                         match occupant {
-                            Some(Piece(t, c)) => char::from_u32((codepoints.get(t).unwrap() + if *c { 0 } else { 6 }) as u32).unwrap(),
+                            Some(Piece(t, c)) => char::from_u32((codepoints.get(t).unwrap() + if c.is_white() { 0 } else { 6 }) as u32).unwrap(),
                             None => ' ',
                         }
                     );
@@ -335,13 +335,13 @@ impl Position {
             .filter(|move_| {
                 if let Move(src, dest, Some(SpecialMoveType::CastlingKingside | SpecialMoveType::CastlingQueenside)) = move_ {
                     for sq in *std::cmp::min(src, dest)..=*std::cmp::max(src, dest) {
-                        if self.controls_square(sq, !side) {
+                        if self.controls_square(sq, !*side) {
                             return false;
                         }
                     }
                     return true;
                 }
-                !helpers::king_capture_pseudolegal(&helpers::change_content(content, move_, castling_rights), !side)
+                !helpers::king_capture_pseudolegal(&helpers::change_content(content, move_, castling_rights), !*side)
             })
             .collect()
     }
@@ -362,7 +362,7 @@ impl Position {
     }
 
     /// Returns an optional boolean representing the side in stalemate (`None` if neither side is in stalemate).
-    pub fn stalemated_side(&self) -> Option<bool> {
+    pub fn stalemated_side(&self) -> Option<Color> {
         if self.is_stalemate() {
             Some(self.side)
         } else {
@@ -371,18 +371,18 @@ impl Position {
     }
 
     /// Returns an optional boolean representing the side in check (`None` if neither side is in check).
-    pub fn checked_side(&self) -> Option<bool> {
-        if helpers::king_capture_pseudolegal(&self.content, false) {
-            Some(true)
-        } else if helpers::king_capture_pseudolegal(&self.content, true) {
-            Some(false)
+    pub fn checked_side(&self) -> Option<Color> {
+        if helpers::king_capture_pseudolegal(&self.content, Color::Black) {
+            Some(Color::White)
+        } else if helpers::king_capture_pseudolegal(&self.content, Color::White) {
+            Some(Color::Black)
         } else {
             None
         }
     }
 
     /// Returns an optional boolean representing the side in checkmate (`None` if neither side is in checkmate).
-    pub fn checkmated_side(&self) -> Option<bool> {
+    pub fn checkmated_side(&self) -> Option<Color> {
         if self.is_checkmate() {
             Some(self.side)
         } else {
@@ -420,8 +420,8 @@ impl Position {
                             _ => true,
                         });
                         pseudolegal_moves.extend(possible_dests.into_iter().map(|d| Move(i, d, None)));
-                        let castling_rights_idx_offset = if *side { 0 } else { 2 };
-                        let (oo_sq, ooo_sq) = if *side { (6, 2) } else { (62, 58) };
+                        let castling_rights_idx_offset = if side.is_white() { 0 } else { 2 };
+                        let (oo_sq, ooo_sq) = if side.is_white() { (6, 2) } else { (62, 58) };
                         let (kingside, queenside) = (castling_rights[castling_rights_idx_offset], castling_rights[castling_rights_idx_offset + 1]);
                         if let Some(r) = kingside {
                             match helpers::count_pieces(i + 1..=oo_sq, content) {
@@ -473,7 +473,7 @@ impl Position {
                     }
                     PieceType::P => {
                         let mut possible_dests = Vec::new();
-                        if *side {
+                        if side.is_white() {
                             if content[i + 8].is_none() {
                                 possible_dests.push((i + 8, false));
                                 if (8..16).contains(&i) && content[i + 16].is_none() {
@@ -482,7 +482,7 @@ impl Position {
                             }
                             if helpers::long_range_can_move(i, 7) {
                                 if let Some(Piece(_, color)) = content[i + 7] {
-                                    if !color {
+                                    if color.is_black() {
                                         possible_dests.push((i + 7, false));
                                     }
                                 } else if ep_target.is_some() && ep_target.unwrap() == i + 7 {
@@ -491,7 +491,7 @@ impl Position {
                             }
                             if helpers::long_range_can_move(i, 9) {
                                 if let Some(Piece(_, color)) = content[i + 9] {
-                                    if !color {
+                                    if color.is_black() {
                                         possible_dests.push((i + 9, false));
                                     }
                                 } else if ep_target.is_some() && ep_target.unwrap() == i + 9 {
@@ -507,7 +507,7 @@ impl Position {
                             }
                             if helpers::long_range_can_move(i, -9) {
                                 if let Some(Piece(_, color)) = content[i - 9] {
-                                    if color {
+                                    if color.is_white() {
                                         possible_dests.push((i - 9, false));
                                     }
                                 } else if ep_target.is_some() && ep_target.unwrap() == i - 9 {
@@ -516,7 +516,7 @@ impl Position {
                             }
                             if helpers::long_range_can_move(i, -7) {
                                 if let Some(Piece(_, color)) = content[i - 7] {
-                                    if color {
+                                    if color.is_white() {
                                         possible_dests.push((i - 7, false));
                                     }
                                 } else if ep_target.is_some() && ep_target.unwrap() == i - 7 {
@@ -576,7 +576,7 @@ impl Position {
     }
 
     /// Checks whether the given side controls a specified square in this position.
-    pub fn controls_square(&self, sq: usize, side: bool) -> bool {
+    pub fn controls_square(&self, sq: usize, side: Color) -> bool {
         let Self {
             mut content,
             castling_rights,
