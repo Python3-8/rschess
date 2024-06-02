@@ -1,4 +1,4 @@
-use super::{Move, Occupant, Piece, PieceType, Position, SpecialMoveType};
+use super::{Move, Piece, PieceType, Position, SpecialMoveType};
 use std::ops::RangeBounds;
 
 /// Converts a square name in the format (<file>, <rank>) to a square index.
@@ -24,7 +24,7 @@ pub fn long_range_can_move(sq: usize, axis_direction: isize) -> bool {
 }
 
 /// Counts the number of pieces on the board identical to the `piece` provided that are within the provided square range.
-pub fn count_piece<R>(rng: R, piece: Piece, content: &[Occupant; 64]) -> usize
+pub fn count_piece<R>(rng: R, piece: Piece, content: &[Option<Piece>; 64]) -> usize
 where
     R: RangeBounds<usize> + Iterator<Item = usize>,
 {
@@ -32,32 +32,32 @@ where
 }
 
 /// Counts the number of pieces on the board that are within the provided square range.
-pub fn count_pieces<R>(rng: R, content: &[Occupant; 64]) -> usize
+pub fn count_pieces<R>(rng: R, content: &[Option<Piece>; 64]) -> usize
 where
     R: RangeBounds<usize> + Iterator<Item = usize>,
 {
-    rng.fold(0, |acc, sq| if let Occupant::Piece(_) = content[sq] { acc + 1 } else { acc })
+    rng.fold(0, |acc, sq| if content[sq].is_some() { acc + 1 } else { acc })
 }
 
 /// Finds the indices of all occurrences of a piece identical to the given `piece` on the board in the square range `rng`.
-pub fn find_pieces<R>(piece: Piece, rng: R, content: &[Occupant; 64]) -> Vec<usize>
+pub fn find_pieces<R>(piece: Piece, rng: R, content: &[Option<Piece>; 64]) -> Vec<usize>
 where
     R: RangeBounds<usize> + Iterator<Item = usize>,
 {
-    let piece = Occupant::Piece(piece);
+    let piece = Some(piece);
     rng.filter(|&sq| content[sq] == piece).collect()
 }
 
 /// Finds the indices of all occurrences pieces on the board in the square range `rng`.
-pub fn find_all_pieces<R>(rng: R, content: &[Occupant; 64]) -> Vec<usize>
+pub fn find_all_pieces<R>(rng: R, content: &[Option<Piece>; 64]) -> Vec<usize>
 where
     R: RangeBounds<usize> + Iterator<Item = usize>,
 {
-    rng.filter(|&sq| matches!(content[sq], Occupant::Piece(_))).collect()
+    rng.filter(|&sq| content[sq].is_some()).collect()
 }
 
 /// Checks whether capturing a king is pseudolegal for the specified side in the given position.
-pub fn king_capture_pseudolegal(content: &[Occupant; 64], side: bool) -> bool {
+pub fn king_capture_pseudolegal(content: &[Option<Piece>; 64], side: bool) -> bool {
     let enemy_king = find_king(!side, content);
     Position {
         content: *content,
@@ -69,48 +69,48 @@ pub fn king_capture_pseudolegal(content: &[Occupant; 64], side: bool) -> bool {
 }
 
 /// Returns the square index of the king of color `color`.
-pub fn find_king(color: bool, content: &[Occupant; 64]) -> usize {
+pub fn find_king(color: bool, content: &[Option<Piece>; 64]) -> usize {
     content
         .iter()
         .enumerate()
-        .find(|(_, o)| if let Occupant::Piece(Piece(PieceType::K, s)) = o { *s == color } else { false })
+        .find(|(_, o)| if let Some(Piece(PieceType::K, s)) = o { *s == color } else { false })
         .unwrap()
         .0
 }
 
 /// Changes the board content based on the given move.
-pub fn change_content(content: &[Occupant; 64], move_: &Move, castling_rights: &[Option<usize>]) -> [Occupant; 64] {
+pub fn change_content(content: &[Option<Piece>; 64], move_: &Move, castling_rights: &[Option<usize>]) -> [Option<Piece>; 64] {
     let mut content = *content;
     let Move(src, dest, spec) = move_;
-    (content[*src], content[*dest]) = (Occupant::Empty, content[*src]);
+    (content[*src], content[*dest]) = (None, content[*src]);
     match spec {
         Some(SpecialMoveType::CastlingKingside | SpecialMoveType::CastlingQueenside) => match *dest {
             6 => {
                 let krook = castling_rights[0].unwrap();
-                (content[krook], content[5]) = (Occupant::Empty, content[krook]);
+                (content[krook], content[5]) = (None, content[krook]);
             }
             2 => {
                 let qrook = castling_rights[1].unwrap();
-                (content[qrook], content[3]) = (Occupant::Empty, content[qrook]);
+                (content[qrook], content[3]) = (None, content[qrook]);
             }
             62 => {
                 let krook = castling_rights[2].unwrap();
-                (content[krook], content[61]) = (Occupant::Empty, content[krook]);
+                (content[krook], content[61]) = (None, content[krook]);
             }
             58 => {
                 let qrook = castling_rights[3].unwrap();
-                (content[qrook], content[59]) = (Occupant::Empty, content[qrook]);
+                (content[qrook], content[59]) = (None, content[qrook]);
             }
             _ => panic!("the universe is malfunctioning"),
         },
         Some(SpecialMoveType::EnPassant) => match dest {
-            16..=23 => content[dest + 8] = Occupant::Empty,
-            40..=47 => content[dest - 8] = Occupant::Empty,
+            16..=23 => content[dest + 8] = None,
+            40..=47 => content[dest - 8] = None,
             _ => panic!("the universe is malfunctioning"),
         },
         Some(SpecialMoveType::Promotion(piece_type)) => {
-            if let Occupant::Piece(Piece(_, color)) = content[*dest] {
-                content[*dest] = Occupant::Piece(Piece(*piece_type, color));
+            if let Some(Piece(_, color)) = content[*dest] {
+                content[*dest] = Some(Piece(*piece_type, color));
             }
         }
         _ => (),

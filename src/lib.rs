@@ -78,7 +78,7 @@ impl Board {
     /// Attempts to construct a `Board` from a standard FEN string, returning an error if the FEN is invalid.
     /// **Shredder-FEN is not supported.**
     pub fn from_fen(fen: &str) -> Result<Self, String> {
-        let mut content = [Occupant::Empty; 64];
+        let mut content = [None; 64];
         let fields: Vec<_> = fen.split(' ').collect();
         let nfields = fields.len();
         if nfields != 6 {
@@ -138,7 +138,7 @@ impl Board {
                                 }
                                 _ => (),
                             }
-                            Occupant::Piece(piece)
+                            Some(piece)
                         }
                         Err(e) => return Err(format!("Invalid FEN: {e}")),
                     };
@@ -350,7 +350,7 @@ impl Board {
         let fullmove_number = self.fullmove_number + if self.position.side { 0 } else { 1 };
         let Move(move_src, move_dest, ..) = move_;
         let (moved_piece, dest_occ) = (self.position.content[move_src], self.position.content[move_dest]);
-        if matches!(moved_piece, Occupant::Piece(Piece(PieceType::P, _))) || matches!(dest_occ, Occupant::Piece(_)) {
+        if matches!(moved_piece, Some(Piece(PieceType::P, _))) || dest_occ.is_some() {
             halfmove_clock = 0;
         } else {
             halfmove_clock += 1;
@@ -501,8 +501,8 @@ impl Board {
         self.position.side
     }
 
-    /// Returns the `Occupant` of a square, or an error if the square name is invalid.
-    pub fn occupant_of_square(&self, file: char, rank: char) -> Result<Occupant, String> {
+    /// Returns the occupant of a square, or an error if the square name is invalid.
+    pub fn occupant_of_square(&self, file: char, rank: char) -> Result<Option<Piece>, String> {
         if !('a'..'h').contains(&file) {
             return Err(format!("Invalid file name: {file}"));
         }
@@ -518,13 +518,6 @@ impl Default for Board {
     fn default() -> Self {
         Self::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap()
     }
-}
-
-/// Represents the occupant of a square.
-#[derive(Eq, PartialEq, Copy, Clone, Debug)]
-pub enum Occupant {
-    Piece(Piece),
-    Empty,
 }
 
 /// Represents a piece in the format (_piece type_, _color_).

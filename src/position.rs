@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
-use super::{helpers, IllegalMoveError, Move, Occupant, Piece, PieceType, SpecialMoveType};
+use super::{helpers, IllegalMoveError, Move, Piece, PieceType, SpecialMoveType};
 
 /// The structure for a chess position
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Position {
     /// The board content; each square is represented by a number 0..64 where a1 is 0 and h8 is 63
-    pub content: [Occupant; 64],
+    pub content: [Option<Piece>; 64],
     /// The side to move; white is `true` and black is `false`
     pub side: bool,
     /// The indices of rook locations representing castling rights for both sides in the format [K, Q, k, q]
@@ -30,14 +30,14 @@ impl Position {
             let mut empty = 0;
             for sq in rank {
                 match sq {
-                    Occupant::Piece(p) => {
+                    Some(p) => {
                         if empty > 0 {
                             rankstr.push(char::from_digit(empty, 10).unwrap());
                             empty = 0;
                         }
                         rankstr.push((*p).into());
                     }
-                    Occupant::Empty => {
+                    None => {
                         empty += 1;
                     }
                 }
@@ -115,7 +115,7 @@ impl Position {
         };
         let piece_type;
         match src_occ {
-            Occupant::Piece(Piece(pt, _)) => match pt {
+            Some(Piece(pt, _)) => match pt {
                 PieceType::P => {
                     return Ok(format!(
                         "{}{suffix}",
@@ -124,8 +124,8 @@ impl Position {
                             _ => format!(
                                 "{}{}",
                                 match dest_occ {
-                                    Occupant::Piece(_) => format!("{srcf}x{destf}{destr}",),
-                                    Occupant::Empty => format!("{destf}{destr}"),
+                                    Some(_) => format!("{srcf}x{destf}{destr}",),
+                                    None => format!("{destf}{destr}"),
                                 },
                                 match spec {
                                     Some(SpecialMoveType::Promotion(piece_type)) => format!("={}", char::from(piece_type)),
@@ -144,8 +144,8 @@ impl Position {
                             _ => format!(
                                 "K{}{destf}{destr}",
                                 match dest_occ {
-                                    Occupant::Piece(_) => "x",
-                                    Occupant::Empty => "",
+                                    Some(_) => "x",
+                                    None => "",
                                 }
                             ),
                         },
@@ -162,7 +162,7 @@ impl Position {
             .iter()
             .filter(|m| {
                 if m.1 == dest {
-                    if let Occupant::Piece(Piece(pt, _)) = content[m.0] {
+                    if let Some(Piece(pt, _)) = content[m.0] {
                         pt == piece_type
                     } else {
                         false
@@ -178,7 +178,7 @@ impl Position {
                 .iter()
                 .filter(|m| {
                     if m.1 == dest {
-                        if let Occupant::Piece(Piece(pt, _)) = content[m.0] {
+                        if let Some(Piece(pt, _)) = content[m.0] {
                             pt == piece_type && helpers::squares_in_file(srcf).contains(&m.0)
                         } else {
                             false
@@ -194,7 +194,7 @@ impl Position {
                     .iter()
                     .filter(|m| {
                         if m.1 == dest {
-                            if let Occupant::Piece(Piece(pt, _)) = content[m.0] {
+                            if let Some(Piece(pt, _)) = content[m.0] {
                                 pt == piece_type && helpers::squares_in_rank(srcr).contains(&m.0)
                             } else {
                                 false
@@ -216,8 +216,8 @@ impl Position {
         Ok(format!(
             "{san}{}{destf}{destr}{suffix}",
             match dest_occ {
-                Occupant::Piece(_) => "x",
-                Occupant::Empty => "",
+                Some(_) => "x",
+                None => "",
             }
         ))
     }
@@ -248,8 +248,8 @@ impl Position {
         let Move(move_src, move_dest, ..) = move_;
         let moved_piece = content[move_src];
         match moved_piece {
-            Occupant::Piece(Piece(PieceType::K, _)) => (castling_rights[castling_rights_idx_offset], castling_rights[castling_rights_idx_offset + 1]) = (None, None),
-            Occupant::Piece(Piece(PieceType::P, _)) => {
+            Some(Piece(PieceType::K, _)) => (castling_rights[castling_rights_idx_offset], castling_rights[castling_rights_idx_offset + 1]) = (None, None),
+            Some(Piece(PieceType::P, _)) => {
                 if (std::cmp::max(move_src, move_dest) - std::cmp::min(move_src, move_dest)) == 16 {
                     ep_target = Some(if side { move_src + 8 } else { move_src - 8 });
                 }
@@ -290,8 +290,8 @@ impl Position {
                     string += &format!(
                         " {} ",
                         match occupant {
-                            Occupant::Piece(Piece(t, c)) => char::from_u32((codepoints.get(t).unwrap() + if *c { 0 } else { 6 }) as u32).unwrap(),
-                            Occupant::Empty => ' ',
+                            Some(Piece(t, c)) => char::from_u32((codepoints.get(t).unwrap() + if *c { 0 } else { 6 }) as u32).unwrap(),
+                            None => ' ',
                         }
                     );
                     if sqi != 7 {
@@ -310,8 +310,8 @@ impl Position {
                     string += &format!(
                         " {} ",
                         match occupant {
-                            Occupant::Piece(Piece(t, c)) => char::from_u32((codepoints.get(t).unwrap() + if *c { 0 } else { 6 }) as u32).unwrap(),
-                            Occupant::Empty => ' ',
+                            Some(Piece(t, c)) => char::from_u32((codepoints.get(t).unwrap() + if *c { 0 } else { 6 }) as u32).unwrap(),
+                            None => ' ',
                         }
                     );
                     if sqi != 7 {
@@ -400,7 +400,7 @@ impl Position {
         } = self;
         let mut pseudolegal_moves = Vec::new();
         for (i, sq) in content.iter().enumerate() {
-            if let Occupant::Piece(piece) = sq {
+            if let Some(piece) = sq {
                 if piece.1 != *side {
                     continue;
                 }
@@ -416,7 +416,7 @@ impl Position {
                             }
                         }
                         possible_dests.retain(|&dest| match content[dest] {
-                            Occupant::Piece(Piece(_, color)) => color != *side,
+                            Some(Piece(_, color)) => color != *side,
                             _ => true,
                         });
                         pseudolegal_moves.extend(possible_dests.into_iter().map(|d| Move(i, d, None)));
@@ -465,7 +465,7 @@ impl Position {
                             dest_squares
                                 .into_iter()
                                 .filter(|&dest| match content[dest] {
-                                    Occupant::Piece(Piece(_, color)) => color != *side,
+                                    Some(Piece(_, color)) => color != *side,
                                     _ => true,
                                 })
                                 .map(|dest| Move(i, dest, None)),
@@ -474,14 +474,14 @@ impl Position {
                     PieceType::P => {
                         let mut possible_dests = Vec::new();
                         if *side {
-                            if let Occupant::Empty = content[i + 8] {
+                            if content[i + 8].is_none() {
                                 possible_dests.push((i + 8, false));
-                                if (8..16).contains(&i) && content[i + 16] == Occupant::Empty {
+                                if (8..16).contains(&i) && content[i + 16].is_none() {
                                     possible_dests.push((i + 16, false))
                                 }
                             }
                             if helpers::long_range_can_move(i, 7) {
-                                if let Occupant::Piece(Piece(_, color)) = content[i + 7] {
+                                if let Some(Piece(_, color)) = content[i + 7] {
                                     if !color {
                                         possible_dests.push((i + 7, false));
                                     }
@@ -490,7 +490,7 @@ impl Position {
                                 }
                             }
                             if helpers::long_range_can_move(i, 9) {
-                                if let Occupant::Piece(Piece(_, color)) = content[i + 9] {
+                                if let Some(Piece(_, color)) = content[i + 9] {
                                     if !color {
                                         possible_dests.push((i + 9, false));
                                     }
@@ -499,14 +499,14 @@ impl Position {
                                 }
                             }
                         } else {
-                            if let Occupant::Empty = content[i - 8] {
+                            if content[i - 8].is_none() {
                                 possible_dests.push((i - 8, false));
-                                if (48..56).contains(&i) && content[i - 16] == Occupant::Empty {
+                                if (48..56).contains(&i) && content[i - 16].is_none() {
                                     possible_dests.push((i - 16, false))
                                 }
                             }
                             if helpers::long_range_can_move(i, -9) {
-                                if let Occupant::Piece(Piece(_, color)) = content[i - 9] {
+                                if let Some(Piece(_, color)) = content[i - 9] {
                                     if color {
                                         possible_dests.push((i - 9, false));
                                     }
@@ -515,7 +515,7 @@ impl Position {
                                 }
                             }
                             if helpers::long_range_can_move(i, -7) {
-                                if let Occupant::Piece(Piece(_, color)) = content[i - 7] {
+                                if let Some(Piece(_, color)) = content[i - 7] {
                                     if color {
                                         possible_dests.push((i - 7, false));
                                     }
@@ -558,7 +558,7 @@ impl Position {
                 while helpers::long_range_can_move(current_sq as usize, axis_direction) {
                     let mut skip = false;
                     current_sq += axis_direction;
-                    if let Occupant::Piece(Piece(_, color)) = content[current_sq as usize] {
+                    if let Some(Piece(_, color)) = content[current_sq as usize] {
                         if color == *side {
                             continue 'axis;
                         } else {
@@ -583,7 +583,7 @@ impl Position {
             ep_target,
             ..
         } = self.clone();
-        content[sq] = Occupant::Piece(Piece(PieceType::P, !side));
+        content[sq] = Some(Piece(PieceType::P, !side));
         Self {
             content,
             side,
@@ -599,7 +599,7 @@ impl Position {
     pub fn count_material(&self) -> Vec<Material> {
         let mut material = Vec::new();
         for sq in 0..64 {
-            if let Occupant::Piece(Piece(piece_type, _)) = self.content[sq] {
+            if let Some(Piece(piece_type, _)) = self.content[sq] {
                 match piece_type {
                     PieceType::K => (),
                     PieceType::N => material.push(Material::Knight),
