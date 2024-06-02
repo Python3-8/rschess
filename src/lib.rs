@@ -1,14 +1,14 @@
 //! A Rust chess library with the aim to be as feature-rich as possible
 //! # Examples
 //! ```
-//! use rschess::{Board, Move, GameResult};
+//! use rschess::{Board, Color, Move, GameResult};
 //!
 //! let mut board = Board::default();
 //! assert_eq!(board.to_fen(), "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
 //! assert!(board.is_ongoing()); // the game is ongoing
-//! assert!(board.side_to_move()); // white's turn to move
+//! assert_eq!(board.side_to_move(), Color::White); // white's turn to move
 //! board.make_move_uci("e2e4").unwrap(); // plays e2 to e4, i.e. 1. e4
-//! assert!(!board.side_to_move()); // black's turn to move
+//! assert_eq!(board.side_to_move(), Color::Black); // black's turn to move
 //! board.make_move_san("e5").unwrap(); // plays 1... e5
 //! assert!(board.is_legal(board.san_to_move("f4").unwrap())); // confirms that 2. f4 is legal
 //! assert!(board.is_legal(Move::from_uci("d2d4").unwrap())); // confirms that d2 to d4, i.e. 2. d4 is legal
@@ -23,7 +23,7 @@
 //! board.make_move_san("fxe5").unwrap(); // plays 3... fxe5
 //! board.make_move_san("Qh5+").unwrap(); // plays 4. Qh5+
 //! assert!(board.is_check()); // confirms that a side is in check
-//! assert_eq!(board.checked_side(), Some(false)); // confirms that black is the side in check
+//! assert_eq!(board.checked_side(), Some(Color::Black)); // confirms that black is the side in check
 //! assert_eq!(board.gen_legal_moves().len(), 2); // confirms that there are only two legal moves (4... g6 and 4... Ke7)
 //! board.make_move_uci("e8e7").unwrap(); // plays e8 to e7, i.e. 4... Ke7
 //! assert_eq!(board.halfmove_clock(), 2); // confirms that the halfmove clock has incremented twice (since two halfmoves have been played without a pawn push or capture)
@@ -396,11 +396,11 @@ impl Board {
         if self.ongoing {
             None
         } else {
-            Some(match self.checkmated_side() {
+            Some(match self.position.checkmated_side() {
                 Some(false) => GameResult::WhiteWins,
                 Some(true) => GameResult::BlackWins,
-                None => match self.stalemated_side() {
-                    Some(s) => GameResult::Draw(DrawType::Stalemate(s)),
+                None => match self.position.stalemated_side() {
+                    Some(s) => GameResult::Draw(DrawType::Stalemate(s.into())),
                     None => {
                         if self.is_fivefold_repetition() {
                             GameResult::Draw(DrawType::FivefoldRepetition)
@@ -476,29 +476,29 @@ impl Board {
         self.position.is_checkmate()
     }
 
-    /// Returns an optional boolean representing the side in stalemate (`None` if neither side is in stalemate).
-    pub fn stalemated_side(&self) -> Option<bool> {
-        self.position.stalemated_side()
+    /// Returns an optional `Color` representing the side in stalemate (`None` if neither side is in stalemate).
+    pub fn stalemated_side(&self) -> Option<Color> {
+        self.position.stalemated_side().map(|s| s.into())
     }
 
-    /// Returns an optional boolean representing the side in check (`None` if neither side is in check).
-    pub fn checked_side(&self) -> Option<bool> {
-        self.position.checked_side()
+    /// Returns an optional `Color` representing the side in check (`None` if neither side is in check).
+    pub fn checked_side(&self) -> Option<Color> {
+        self.position.checked_side().map(|s| s.into())
     }
 
-    /// Returns an optional boolean representing the side in checkmate (`None` if neither side is in checkmate).
-    pub fn checkmated_side(&self) -> Option<bool> {
-        self.position.checkmated_side()
+    /// Returns an optional `Color` representing the side in checkmate (`None` if neither side is in checkmate).
+    pub fn checkmated_side(&self) -> Option<Color> {
+        self.position.checkmated_side().map(|s| s.into())
     }
 
-    /// Pretty-prints the position to a string, from the perspective of the side `perspective` (`true` for white, `false` for black).
-    pub fn pretty_print(&self, perspective: bool) -> String {
-        self.position.pretty_print(perspective)
+    /// Pretty-prints the position to a string, from the perspective of the side `perspective`.
+    pub fn pretty_print(&self, perspective: Color) -> String {
+        self.position.pretty_print(perspective.into())
     }
 
-    /// Returns which side's turn it is to move (`true` for white, `false` for black).
-    pub fn side_to_move(&self) -> bool {
-        self.position.side
+    /// Returns which side's turn it is to move.
+    pub fn side_to_move(&self) -> Color {
+        self.position.side.into()
     }
 
     /// Returns the occupant of a square, or an error if the square name is invalid.
@@ -523,6 +523,18 @@ impl Default for Board {
 /// Represents a piece in the format (_piece type_, _color_).
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub struct Piece(PieceType, bool);
+
+impl Piece {
+    /// Returns the type of piece.
+    pub fn piece_type(&self) -> PieceType {
+        self.0
+    }
+
+    /// Returns the color of the piece.
+    pub fn color(&self) -> Color {
+        self.1.into()
+    }
+}
 
 impl TryFrom<char> for Piece {
     type Error = String;
@@ -662,8 +674,31 @@ pub enum GameResult {
 pub enum DrawType {
     FivefoldRepetition,
     SeventyFiveMoveRule,
-    Stalemate(bool),
+    Stalemate(Color),
     InsufficientMaterial,
+}
+
+/// Represents a side/color.
+#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+pub enum Color {
+    White,
+    Black,
+}
+
+impl From<bool> for Color {
+    fn from(color: bool) -> Color {
+        if color {
+            Self::White
+        } else {
+            Self::Black
+        }
+    }
+}
+
+impl From<Color> for bool {
+    fn from(color: Color) -> bool {
+        matches!(color, Color::White)
+    }
 }
 
 /// Represents types of special moves (castling/promotion/en passant).

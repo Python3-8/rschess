@@ -1,5 +1,5 @@
 use super::helpers;
-use super::{Board, Move, Pgn, PieceType, SpecialMoveType};
+use super::{Board, Color, Move, Pgn, PieceType, SpecialMoveType};
 
 #[test]
 fn default_board() {
@@ -255,7 +255,7 @@ fn to_san() {
     let mut board = Board::from_fen("7k/4Q3/6Q1/3Q4/6Q1/8/2Q3Q1/K3Q3 w - - 0 1").unwrap();
     assert_eq!(board.move_to_san(Move::from_uci("g6e4").unwrap()).unwrap(), "Q6e4");
     board.make_move(Move::from_uci("g6e4").unwrap()).unwrap();
-    assert_eq!(board.stalemated_side(), Some(false));
+    assert_eq!(board.stalemated_side(), Some(Color::Black));
     let mut board = Board::from_fen("6B1/2N1N3/1N3N2/8/1N3N2/2N1N1K1/8/7k w - - 0 1").unwrap();
     assert_eq!(board.move_to_san(Move::from_uci("c7d5").unwrap()).unwrap(), "Nc7d5");
     assert_eq!(board.move_to_san(Move::from_uci("g8d5").unwrap()).unwrap(), "Bd5+");
@@ -263,7 +263,7 @@ fn to_san() {
     board.make_move_uci("h1g1").unwrap();
     assert_eq!(board.move_to_san(Move::from_uci("f4h3").unwrap()).unwrap(), "Nh3#");
     board.make_move_uci("f4h3").unwrap();
-    assert_eq!(board.checkmated_side(), Some(false));
+    assert_eq!(board.checkmated_side(), Some(Color::Black));
 }
 
 #[test]
@@ -299,7 +299,7 @@ fn valid_make_move_san() {
     board.make_move_san("e3").unwrap();
     board.make_move_san("e6").unwrap();
     board.make_move_san("Nge2").unwrap();
-    println!("{}", board.pretty_print(false));
+    println!("{}", board.pretty_print(Color::Black));
 }
 
 #[test]
