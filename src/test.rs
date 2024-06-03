@@ -305,6 +305,7 @@ fn valid_make_move_san() {
 #[test]
 #[ignore]
 fn pgn_tokenize() {
-    let pgn_str = include_str!("../test.pgn");
-    Pgn::parse(pgn_str).unwrap();
+    let pgn_str = include_str!("../test1.pgn");
+    let pgn = Pgn::try_from(pgn_str).unwrap();
+    println!("{}", pgn.board.pretty_print(Color::White));
 }

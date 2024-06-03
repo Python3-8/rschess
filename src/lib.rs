@@ -318,7 +318,7 @@ impl Board {
                 if self.is_legal(m) {
                     Ok(m)
                 } else {
-                    Err("Invalid SAN: This move is illegal".to_owned())
+                    Err(format!("Invalid SAN: this move '{san}' is illegal in this position"))
                 }
             }
             e => e,
@@ -698,7 +698,7 @@ impl Color {
 impl TryFrom<&str> for Color {
     type Error = String;
 
-    fn try_from(string: &str) -> Result<Self, String> {
+    fn try_from(string: &str) -> Result<Self, Self::Error> {
         match string {
             "w" => Ok(Self::White),
             "b" => Ok(Self::Black),
