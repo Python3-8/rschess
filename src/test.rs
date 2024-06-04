@@ -1,5 +1,5 @@
 use super::helpers;
-use super::{Board, Color, Move, Pgn, PieceType, SpecialMoveType};
+use super::{Board, Color, Fen, Move, Pgn, PieceType, SpecialMoveType};
 
 #[test]
 fn default_board() {
@@ -8,34 +8,34 @@ fn default_board() {
 
 #[test]
 fn valid_fen() {
-    Board::from_fen("6k1/8/6K1/6P1/8/8/8/8 w - - 0 1").unwrap();
-    Board::from_fen("k5rb/8/8/4P3/3p4/8/8/K5BR w Kk - 0 1").unwrap();
+    Fen::try_from("6k1/8/6K1/6P1/8/8/8/8 w - - 0 1").unwrap();
+    Fen::try_from("k5rb/8/8/4P3/3p4/8/8/K5BR w Kk - 0 1").unwrap();
 }
 
 #[test]
 #[should_panic]
 fn invalid_fen() {
-    // Board::from_fen("what").unwrap();
-    // Board::from_fen("blafsd o fs o sdo d").unwrap();
-    // Board::from_fen("rnbkkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
-    // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RKBQKBNR w KQkq - 0 1").unwrap();
-    // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQQBNR w KQkq - 0 1").unwrap();
-    // Board::from_fen("rnbqkbnr/pppppppp/8p/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
-    // Board::from_fen("rnbqkbnr/pppppxpp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
-    // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP-RNBQKBNR w KQkq - 0 1").unwrap();
-    // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR lol KQkq - 0 1").unwrap();
-    // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b ros - 0 1").unwrap();
-    // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KKqk - 0 1").unwrap();
-    // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq C6 0 1").unwrap();
-    // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq c5 0 1").unwrap();
-    // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq brr 0 1").unwrap();
-    // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0.1 1").unwrap();
-    // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 151 1").unwrap();
-    // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 150 0").unwrap();
-    // Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 150 bro").unwrap();
-    // Board::from_fen("k5rb/8/8/4P3/3p4/8/8/K5BR w KQkq - 0 1").unwrap();
-    // Board::from_fen("6k1/8/6K1/6P1/8/8/8/6p1 w - - 0 1").unwrap();
-    Board::from_fen("8/8/4k3/8/2K2N2/8/8/8 w - - 0 1").unwrap();
+    // Fen::try_from("what").unwrap();
+    // Fen::try_from("blafsd o fs o sdo d").unwrap();
+    // Fen::try_from("rnbkkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
+    // Fen::try_from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RKBQKBNR w KQkq - 0 1").unwrap();
+    // Fen::try_from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQQBNR w KQkq - 0 1").unwrap();
+    // Fen::try_from("rnbqkbnr/pppppppp/8p/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
+    // Fen::try_from("rnbqkbnr/pppppxpp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
+    // Fen::try_from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP-RNBQKBNR w KQkq - 0 1").unwrap();
+    // Fen::try_from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR lol KQkq - 0 1").unwrap();
+    // Fen::try_from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b ros - 0 1").unwrap();
+    // Fen::try_from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KKqk - 0 1").unwrap();
+    // Fen::try_from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq C6 0 1").unwrap();
+    // Fen::try_from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq c5 0 1").unwrap();
+    // Fen::try_from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq brr 0 1").unwrap();
+    // Fen::try_from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0.1 1").unwrap();
+    // Fen::try_from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 151 1").unwrap();
+    // Fen::try_from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 150 0").unwrap();
+    // Fen::try_from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 150 bro").unwrap();
+    // Fen::try_from("k5rb/8/8/4P3/3p4/8/8/K5BR w KQkq - 0 1").unwrap();
+    // Fen::try_from("6k1/8/6K1/6P1/8/8/8/6p1 w - - 0 1").unwrap();
+    Fen::try_from("8/8/4k3/8/2K2N2/8/8/8 w - - 0 1").unwrap();
 }
 
 #[test]
@@ -50,8 +50,8 @@ fn idx_sq_conversion() {
 
 #[test]
 fn board_to_fen() {
-    assert_eq!(Board::from_fen("6k1/8/6K1/6P1/8/8/8/8 w - - 0 1").unwrap().to_fen(), "6k1/8/6K1/6P1/8/8/8/8 w - - 0 1");
-    assert_eq!(Board::from_fen("k5rb/8/8/4P3/3p4/8/8/K5BR w Kk - 0 1").unwrap().to_fen(), "k5rb/8/8/4P3/3p4/8/8/K5BR w Kk - 0 1");
+    assert_eq!(Fen::try_from("6k1/8/6K1/6P1/8/8/8/8 w - - 0 1").unwrap().to_string(), "6k1/8/6K1/6P1/8/8/8/8 w - - 0 1");
+    assert_eq!(Fen::try_from("k5rb/8/8/4P3/3p4/8/8/K5BR w Kk - 0 1").unwrap().to_string(), "k5rb/8/8/4P3/3p4/8/8/K5BR w Kk - 0 1");
     assert_eq!(Board::default().to_fen(), Board::default().to_fen());
 }
 
@@ -85,7 +85,7 @@ fn pseudolegal_moves() {
         Move(15, 31, None),
     ];
     check(board, &legal);
-    let board = Board::from_fen("1k6/3p4/1K6/2P5/8/8/8/8 b - - 0 1").unwrap();
+    let board = Board::from_fen(Fen::try_from("1k6/3p4/1K6/2P5/8/8/8/8 b - - 0 1").unwrap());
     let legal = [
         Move(51, 43, None),
         Move(51, 35, None),
@@ -96,7 +96,7 @@ fn pseudolegal_moves() {
         Move(57, 48, None),
     ];
     check(board, &legal);
-    let board = Board::from_fen("1k6/8/1K6/2Pp4/8/8/8/8 w - d6 0 2").unwrap();
+    let board = Board::from_fen(Fen::try_from("1k6/8/1K6/2Pp4/8/8/8/8 w - d6 0 2").unwrap());
     let legal = [
         Move(34, 42, None),
         Move(34, 43, Some(SpecialMoveType::EnPassant)),
@@ -109,7 +109,7 @@ fn pseudolegal_moves() {
         Move(41, 32, None),
     ];
     check(board, &legal);
-    let board = Board::from_fen("k7/3N4/K7/8/8/8/8/8 w - - 0 1").unwrap();
+    let board = Board::from_fen(Fen::try_from("k7/3N4/K7/8/8/8/8/8 w - - 0 1").unwrap());
     let legal = [
         Move(40, 41, None),
         Move(40, 48, None),
@@ -124,7 +124,7 @@ fn pseudolegal_moves() {
         Move(51, 41, None),
     ];
     check(board, &legal);
-    let board = Board::from_fen("k7/3P4/K7/8/8/8/8/8 w - - 0 1").unwrap();
+    let board = Board::from_fen(Fen::try_from("k7/3P4/K7/8/8/8/8/8 w - - 0 1").unwrap());
     let legal = [
         Move(40, 41, None),
         Move(40, 48, None),
@@ -137,7 +137,7 @@ fn pseudolegal_moves() {
         Move(51, 59, Some(SpecialMoveType::Promotion(PieceType::N))),
     ];
     check(board, &legal);
-    let board = Board::from_fen("K7/8/k7/8/8/8/7p/8 b - - 0 1").unwrap();
+    let board = Board::from_fen(Fen::try_from("K7/8/k7/8/8/8/7p/8 b - - 0 1").unwrap());
     let legal = [
         Move(15, 7, Some(SpecialMoveType::Promotion(PieceType::Q))),
         Move(15, 7, Some(SpecialMoveType::Promotion(PieceType::R))),
@@ -182,10 +182,10 @@ fn legal_moves() {
         Move(15, 31, None),
     ];
     check(board, &legal);
-    let board = Board::from_fen("1k6/3p4/1K6/2P5/8/8/8/8 b - - 0 1").unwrap();
+    let board = Board::from_fen(Fen::try_from("1k6/3p4/1K6/2P5/8/8/8/8 b - - 0 1").unwrap());
     let legal = [Move(51, 43, None), Move(51, 35, None), Move(57, 58, None), Move(57, 56, None)];
     check(board, &legal);
-    let board = Board::from_fen("1k6/8/1K6/2Pp4/8/8/8/8 w - d6 0 2").unwrap();
+    let board = Board::from_fen(Fen::try_from("1k6/8/1K6/2Pp4/8/8/8/8 w - d6 0 2").unwrap());
     let legal = [
         Move(34, 42, None),
         Move(34, 43, Some(SpecialMoveType::EnPassant)),
@@ -195,10 +195,10 @@ fn legal_moves() {
         Move(41, 32, None),
     ];
     check(board, &legal);
-    let board = Board::from_fen("k7/3N4/K7/8/8/8/8/8 w - - 0 1").unwrap();
+    let board = Board::from_fen(Fen::try_from("k7/3N4/K7/8/8/8/8/8 w - - 0 1").unwrap());
     let legal = [];
     check(board, &legal);
-    let board = Board::from_fen("k7/3P4/K7/8/8/8/8/8 w - - 0 1").unwrap();
+    let board = Board::from_fen(Fen::try_from("k7/3P4/K7/8/8/8/8/8 w - - 0 1").unwrap());
     let legal = [
         Move(40, 41, None),
         Move(40, 32, None),
@@ -209,7 +209,7 @@ fn legal_moves() {
         Move(51, 59, Some(SpecialMoveType::Promotion(PieceType::N))),
     ];
     check(board, &legal);
-    let board = Board::from_fen("K7/8/k7/8/8/8/7p/8 b - - 0 1").unwrap();
+    let board = Board::from_fen(Fen::try_from("K7/8/k7/8/8/8/7p/8 b - - 0 1").unwrap());
     let legal = [
         Move(15, 7, Some(SpecialMoveType::Promotion(PieceType::Q))),
         Move(15, 7, Some(SpecialMoveType::Promotion(PieceType::R))),
@@ -220,7 +220,7 @@ fn legal_moves() {
         Move(40, 33, None),
     ];
     check(board, &legal);
-    let board = Board::from_fen("8/8/8/8/8/4k3/4p3/4K2R w K - 0 1").unwrap();
+    let board = Board::from_fen(Fen::try_from("8/8/8/8/8/4k3/4p3/4K2R w K - 0 1").unwrap());
     let legal = [
         Move(7, 6, None),
         Move(7, 5, None),
@@ -233,7 +233,7 @@ fn legal_moves() {
         Move(7, 63, None),
     ];
     check(board, &legal);
-    let board = Board::from_fen("8/8/8/8/8/2b1kb2/3R4/4K2R w K - 0 1").unwrap();
+    let board = Board::from_fen(Fen::try_from("8/8/8/8/8/2b1kb2/3R4/4K2R w K - 0 1").unwrap());
     let legal = [
         Move(4, 5, None),
         Move(4, 6, Some(SpecialMoveType::CastlingKingside)),
@@ -252,11 +252,11 @@ fn legal_moves() {
 
 #[test]
 fn to_san() {
-    let mut board = Board::from_fen("7k/4Q3/6Q1/3Q4/6Q1/8/2Q3Q1/K3Q3 w - - 0 1").unwrap();
+    let mut board = Board::from_fen(Fen::try_from("7k/4Q3/6Q1/3Q4/6Q1/8/2Q3Q1/K3Q3 w - - 0 1").unwrap());
     assert_eq!(board.move_to_san(Move::from_uci("g6e4").unwrap()).unwrap(), "Q6e4");
     board.make_move(Move::from_uci("g6e4").unwrap()).unwrap();
     assert_eq!(board.stalemated_side(), Some(Color::Black));
-    let mut board = Board::from_fen("6B1/2N1N3/1N3N2/8/1N3N2/2N1N1K1/8/7k w - - 0 1").unwrap();
+    let mut board = Board::from_fen(Fen::try_from("6B1/2N1N3/1N3N2/8/1N3N2/2N1N1K1/8/7k w - - 0 1").unwrap());
     assert_eq!(board.move_to_san(Move::from_uci("c7d5").unwrap()).unwrap(), "Nc7d5");
     assert_eq!(board.move_to_san(Move::from_uci("g8d5").unwrap()).unwrap(), "Bd5+");
     board.make_move_uci("g8d5").unwrap();
@@ -268,16 +268,12 @@ fn to_san() {
 
 #[test]
 fn insufficient_material() {
-    assert!(Board::from_fen("k1b1b1b1/1b1b1b1B/b1b1b1B1/1b1b1B1B/b1b1B1B1/1b1B1B1B/b1B3B1/1B1B1B1K w - - 0 1")
-        .unwrap()
-        .is_insufficient_material());
-    assert!(!Board::from_fen("k1b1b1b1/1b1b1b1B/b1b1b1B1/1b1bbB1B/b1b1B1B1/1b1BBB1B/b1B3B1/1B1B1B1K w - - 0 1")
-        .unwrap()
-        .is_insufficient_material());
-    assert!(!Board::from_fen("kn6/8/1K6/3N4/8/8/8/8 w - - 0 1").unwrap().is_insufficient_material());
-    assert!(!Board::from_fen("kB6/8/bK6/8/8/8/8/8 w - - 0 1").unwrap().is_insufficient_material());
-    assert!(Board::from_fen("k1B5/8/bK6/8/8/8/8/8 w - - 0 1").unwrap().is_insufficient_material());
-    assert!(Board::from_fen("k1N5/8/1K6/8/8/8/8/8 w - - 0 1").unwrap().is_insufficient_material());
+    assert!(Board::from_fen(Fen::try_from("k1b1b1b1/1b1b1b1B/b1b1b1B1/1b1b1B1B/b1b1B1B1/1b1B1B1B/b1B3B1/1B1B1B1K w - - 0 1").unwrap()).is_insufficient_material());
+    assert!(!Board::from_fen(Fen::try_from("k1b1b1b1/1b1b1b1B/b1b1b1B1/1b1bbB1B/b1b1B1B1/1b1BBB1B/b1B3B1/1B1B1B1K w - - 0 1").unwrap()).is_insufficient_material());
+    assert!(!Board::from_fen(Fen::try_from("kn6/8/1K6/3N4/8/8/8/8 w - - 0 1").unwrap()).is_insufficient_material());
+    assert!(!Board::from_fen(Fen::try_from("kB6/8/bK6/8/8/8/8/8 w - - 0 1").unwrap()).is_insufficient_material());
+    assert!(Board::from_fen(Fen::try_from("k1B5/8/bK6/8/8/8/8/8 w - - 0 1").unwrap()).is_insufficient_material());
+    assert!(Board::from_fen(Fen::try_from("k1N5/8/1K6/8/8/8/8/8 w - - 0 1").unwrap()).is_insufficient_material());
 }
 
 #[test]

@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use super::{helpers, Color, IllegalMoveError, Move, Piece, PieceType, SpecialMoveType};
+use std::collections::HashMap;
 
 /// The structure for a chess position
 #[derive(Eq, PartialEq, Clone, Debug)]

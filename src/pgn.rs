@@ -1,4 +1,4 @@
-use super::{Board, Color, GameResult};
+use super::{Board, Color, Fen, GameResult};
 use regex::Regex;
 use std::{collections::HashMap, fmt};
 
@@ -100,7 +100,7 @@ impl Pgn {
             return Err("Invalid PGN: the Seven Tag Roster (https://en.wikipedia.org/wiki/Portable_Game_Notation#Seven_Tag_Roster) must be followed".to_owned());
         }
         let mut board = match tag_pairs.get("FEN") {
-            Some(fen) => Board::from_fen(fen)?,
+            Some(fen) => Board::from_fen(Fen::try_from(fen.as_str()).unwrap()),
             _ => Board::default(),
         };
         for (_, w, b) in moves {
@@ -127,15 +127,16 @@ impl Pgn {
                     return Err("Invalid PGN: the game has been drawn but the result is not 1/2-1/2".to_owned());
                 }
             }
-            None => match result {
-                Some(res) => match (res.0.as_str(), res.1.as_str()) {
-                    ("1", "0") => board.resign(Color::Black).unwrap(),
-                    ("0", "1") => board.resign(Color::White).unwrap(),
-                    ("1/2", "1/2") => board.agree_draw().unwrap(),
-                    _ => return Err(format!("Invalid PGN: {}-{} is not a valid result", res.0, res.1)),
-                },
-                _ => (),
-            },
+            None => {
+                if let Some(res) = result {
+                    match (res.0.as_str(), res.1.as_str()) {
+                        ("1", "0") => board.resign(Color::Black).unwrap(),
+                        ("0", "1") => board.resign(Color::White).unwrap(),
+                        ("1/2", "1/2") => board.agree_draw().unwrap(),
+                        _ => return Err(format!("Invalid PGN: {}-{} is not a valid result", res.0, res.1)),
+                    }
+                }
+            }
         }
         Ok(Self { tag_pairs, board })
     }

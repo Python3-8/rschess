@@ -3,9 +3,9 @@ A Rust chess library with the aim to be as feature-rich as possible
 
 # Examples
 ```rs
-use rschess::{Board, Color, Move, GameResult, WinType};
+use rschess::{Board, Color, Fen, Move, GameResult, WinType};
 let mut board = Board::default();
-assert_eq!(board.to_fen(), "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+assert_eq!(board.to_fen(), Fen::try_from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap());
 assert!(board.is_ongoing()); // the game is ongoing
 assert!(board.side_to_move().is_white()); // white's turn to move
 board.make_move_uci("e2e4").unwrap(); // plays e2 to e4, i.e. 1. e4
