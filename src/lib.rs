@@ -1,7 +1,7 @@
 //! A Rust chess library with the aim to be as feature-rich as possible
 //! # Examples
 //! ```
-//! use rschess::{Board, Color, Move, GameResult};
+//! use rschess::{Board, Color, Move, GameResult, WinType};
 //!
 //! let mut board = Board::default();
 //! assert_eq!(board.to_fen(), "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
@@ -43,7 +43,7 @@
 //! board.make_move_san("hxg5#").unwrap(); // plays 10. hxg5#
 //! assert!(board.is_game_over()); // confirms that the game is over
 //! assert!(board.is_checkmate()); // confirms that a side has been checkmated
-//! assert_eq!(board.game_result(), Some(GameResult::WhiteWins)); // confirms that white has won
+//! assert_eq!(board.game_result(), Some(GameResult::Wins(Color::White, WinType::Checkmate))); // confirms that white has won
 //! assert_eq!(board.fullmove_number(), 10); // confirms that the current fullmove number is 10
 //! assert_eq!(board.gen_legal_moves().len(), 0); // confirms that there are no legal moves because the game is over
 //! ```
@@ -72,6 +72,10 @@ pub struct Board {
     move_history: Vec<Move>,
     /// The FEN string representing the initial game state
     initial_fen: String,
+    /// The side that has resigned (or lost by timeout)
+    resigned_side: Option<Color>,
+    /// Whether a draw has been made by agreement (or claimed)
+    draw_agreed: bool,
 }
 
 impl Board {
@@ -291,9 +295,11 @@ impl Board {
             halfmove_clock,
             fullmove_number,
             ongoing: halfmove_clock < 150,
-            position_history: vec![position],
+            position_history: Vec::new(),
             move_history: Vec::new(),
             initial_fen: fen.to_owned(),
+            resigned_side: None,
+            draw_agreed: false,
         };
         board.check_game_over();
         Ok(board)
@@ -374,6 +380,7 @@ impl Board {
         self.make_move(move_).map_err(|e| format!("{e}"))
     }
 
+    /// Updates the `ongoing` property of the `Board` if the game is over
     fn check_game_over(&mut self) {
         if self.is_fivefold_repetition() || self.is_seventy_five_move_rule() || self.is_stalemate() || self.is_insufficient_material() || self.is_checkmate() {
             self.ongoing = false;
@@ -395,13 +402,18 @@ impl Board {
         if self.ongoing {
             None
         } else {
-            Some(match self.checkmated_side() {
-                Some(Color::Black) => GameResult::WhiteWins,
-                Some(Color::White) => GameResult::BlackWins,
-                None => match self.stalemated_side() {
-                    Some(s) => GameResult::Draw(DrawType::Stalemate(s)),
+            Some(if self.draw_agreed {
+                GameResult::Draw(DrawType::Agreement)
+            } else if let Some(s) = self.resigned_side {
+                GameResult::Wins(!s, WinType::Resignation)
+            } else {
+                match self.checkmated_side() {
+                    Some(Color::Black) => GameResult::Wins(Color::White, WinType::Checkmate),
+                    Some(Color::White) => GameResult::Wins(Color::Black, WinType::Checkmate),
                     None => {
-                        if self.is_fivefold_repetition() {
+                        if let Some(s) = self.stalemated_side() {
+                            GameResult::Draw(DrawType::Stalemate(s))
+                        } else if self.is_fivefold_repetition() {
                             GameResult::Draw(DrawType::FivefoldRepetition)
                         } else if self.is_seventy_five_move_rule() {
                             GameResult::Draw(DrawType::SeventyFiveMoveRule)
@@ -411,7 +423,7 @@ impl Board {
                             panic!("the universe is malfunctioning")
                         }
                     }
-                },
+                }
             })
         }
     }
@@ -509,6 +521,48 @@ impl Board {
             return Err(format!("Invalid rank: {rank}"));
         }
         Ok(self.position.content[helpers::sq_to_idx(file, rank)])
+    }
+
+    /// Resigns the game for a certain side, if the game is ongoing. Currently, this function should also be used to represent a loss by timeout.
+    pub fn resign(&mut self, side: Color) -> Result<(), String> {
+        if !self.ongoing {
+            return Err("A player cannot resign when the game is already over".to_owned());
+        }
+        self.ongoing = false;
+        self.resigned_side = Some(side);
+        Ok(())
+    }
+
+    /// Makes a draw by agreement, if the game is ongoing. Currently, this function should also be used to represent a draw claim.
+    pub fn agree_draw(&mut self) -> Result<(), String> {
+        if !self.ongoing {
+            return Err("Players cannot agree to a draw when the game is already over".to_owned());
+        }
+        self.ongoing = false;
+        self.draw_agreed = true;
+        Ok(())
+    }
+
+    /// Generates the SAN movetext of the game thus far (excluding the game result)
+    pub fn gen_movetext(&self) -> String {
+        let mut movetext = String::new();
+        // TODO considering creating Fen struct?
+        let initial_side = Color::try_from(self.initial_fen.split(' ').nth(1).unwrap()).unwrap();
+        let initial_fullmove_number: usize = self.initial_fen.split(' ').nth(5).unwrap().parse().unwrap();
+        let mut current_side = initial_side;
+        let mut current_fullmove_number = initial_fullmove_number;
+        for (movei, &move_) in self.move_history.iter().enumerate() {
+            let pos = &self.position_history[movei];
+            let san = pos.move_to_san(move_).unwrap();
+            if current_side.is_black() {
+                movetext.push_str(&format!("{}{san} ", if movei == 0 { format!("{current_fullmove_number}... ") } else { String::new() }));
+                current_fullmove_number += 1;
+            } else {
+                movetext.push_str(&format!("{current_fullmove_number}. {san} "))
+            }
+            current_side = !current_side;
+        }
+        movetext.trim().to_owned()
     }
 }
 
@@ -662,9 +716,16 @@ impl Move {
 /// Represents game results.
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub enum GameResult {
-    WhiteWins,
+    Wins(Color, WinType),
     Draw(DrawType),
-    BlackWins,
+}
+
+/// Represents types of wins.
+#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+pub enum WinType {
+    Checkmate,
+    /// Currently, a loss by timeout is also considered a resignation.
+    Resignation,
 }
 
 /// Represents types of draws.
@@ -674,6 +735,8 @@ pub enum DrawType {
     SeventyFiveMoveRule,
     Stalemate(Color),
     InsufficientMaterial,
+    /// Currently, a claimed draw is also considered a draw by agreement.
+    Agreement,
 }
 
 /// Represents a side/color.
