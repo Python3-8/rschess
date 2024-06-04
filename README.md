@@ -4,6 +4,7 @@ A Rust chess library with the aim to be as feature-rich as possible
 # Examples
 ```rs
 use rschess::{Board, Color, Fen, Move, GameResult, WinType};
+
 let mut board = Board::default();
 assert_eq!(board.to_fen(), Fen::try_from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap());
 assert!(board.is_ongoing()); // the game is ongoing
