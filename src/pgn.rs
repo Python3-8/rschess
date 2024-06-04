@@ -2,6 +2,8 @@ use super::Board;
 use regex::Regex;
 use std::collections::HashMap;
 
+const SEVEN_TAG_ROSTER: [&str; 7] = ["Event", "Site", "Date", "Round", "White", "Black", "Result"];
+
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Pgn {
     pub tag_pairs: HashMap<String, String>,
@@ -17,7 +19,7 @@ impl Pgn {
         let result_regex = Regex::new(r"^(\n|.)*(?<white_score>0|1\/2|1)-(?<black_score>0|1\/2|1)\s*$").unwrap();
         let mut tokens = Vec::new();
         for caps in tag_pair_regex.captures_iter(text) {
-            tokens.push(Token::TagPair(caps["name"].to_string(), caps["value"].to_string()));
+            tokens.push(Token::TagPair(caps["name"].to_string(), caps["value"].replace(r"\\", r"\").replace(r#"\""#, r#"""#).to_string()));
         }
         for caps in fullmove_san_regex.captures_iter(text) {
             tokens.push(Token::FullmoveSan(caps["move_number"].parse().unwrap(), caps["white_move"].to_string(), caps["black_move"].to_string()));
@@ -89,11 +91,12 @@ impl Pgn {
                         return Err("Invalid PGN: there can only be one game result".to_owned());
                     }
                     result_done = true;
-                    // TODO
+                    // TODO result
+                    // TODO Board::resign(Color), Board::draw() or something like that
                 }
             }
         }
-        if ["Event", "Site", "Date", "Round", "White", "Black", "Result"].into_iter().any(|k| !tag_pairs.contains_key(k)) {
+        if SEVEN_TAG_ROSTER.iter().any(|&k| !tag_pairs.contains_key(k)) {
             return Err("Invalid PGN: the Seven Tag Roster (https://en.wikipedia.org/wiki/Portable_Game_Notation#Seven_Tag_Roster) must be followed".to_owned());
         }
         let mut board = match tag_pairs.get("FEN") {
@@ -117,6 +120,26 @@ impl TryFrom<&str> for Pgn {
 
     fn try_from(text: &str) -> Result<Pgn, Self::Error> {
         Self::parse(Self::tokenize(text))
+    }
+}
+
+impl ToString for Pgn {
+    fn to_string(self: &Self) -> String {
+        let mut pgn = String::new();
+        let mut tag_pairs = self.tag_pairs.clone();
+        for &name in &SEVEN_TAG_ROSTER {
+            tag_pairs.remove(name);
+            let line = format!(r#"[{name} "{}"]\n"#, self.tag_pairs.get(name).unwrap());
+            pgn.push_str(&line);
+        }
+        let mut names: Vec<_> = tag_pairs.keys().collect();
+        names.sort();
+        for name in names {
+            let line = format!(r#"[{name} "{}"]\n"#, self.tag_pairs.get(name).unwrap());
+            pgn.push_str(&line);
+        }
+        // TODO movetext
+        pgn
     }
 }
 
