@@ -342,6 +342,21 @@ impl Board {
         Ok(())
     }
 
+    /// Returns an optional `Color` representing the side that has resigned (`None` if neither side has resigned).
+    pub fn resigned_side(&self) -> Option<Color> {
+        self.resigned_side
+    }
+
+    /// Checks whether a draw has been agreed upon.
+    pub fn draw_agreed(&self) -> bool {
+        self.draw_agreed
+    }
+
+    /// Returns the initial FEN of the game.
+    pub fn initial_fen(&self) -> &Fen {
+        &self.initial_fen
+    }
+
     /// Generates the SAN movetext of the game thus far (excluding the game result)
     pub fn gen_movetext(&self) -> String {
         let mut movetext = String::new();
@@ -371,7 +386,7 @@ impl Default for Board {
     }
 }
 
-/// Represents FEN.
+/// Represents FEN (Forsyth-Edwards Notation).
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Fen {
     position: Position,
@@ -628,12 +643,14 @@ impl Piece {
 impl TryFrom<char> for Piece {
     type Error = String;
 
+    /// Attempts to convert a piece character to a `Piece`.
     fn try_from(value: char) -> Result<Self, Self::Error> {
         Ok(Self(PieceType::try_from(value)?, if value.is_ascii_uppercase() { Color::White } else { Color::Black }))
     }
 }
 
 impl From<Piece> for char {
+    /// Converts a `Piece` to a piece character.
     fn from(piece: Piece) -> char {
         let ch = piece.0.into();
         match piece.1 {
@@ -657,6 +674,7 @@ pub enum PieceType {
 impl TryFrom<char> for PieceType {
     type Error = String;
 
+    /// Attempts to convert a piece character to a `PieceType`.
     fn try_from(value: char) -> Result<Self, Self::Error> {
         if !value.is_ascii_alphanumeric() {
             return Err(format!("Invalid piece character: '{value}' is not ASCII alphanumeric"));
@@ -674,6 +692,7 @@ impl TryFrom<char> for PieceType {
 }
 
 impl From<PieceType> for char {
+    /// Converts a `PieceType` to a piece character.
     fn from(piece_type: PieceType) -> char {
         match piece_type {
             PieceType::K => 'K',
@@ -756,6 +775,25 @@ pub enum GameResult {
     Draw(DrawType),
 }
 
+impl fmt::Display for GameResult {
+    /// Represents the game result as a string (1-0 if white wins, 0-1 if black wins, or 1/2-1/2 in the case of a draw).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Wins(c, _) =>
+                    if c.is_white() {
+                        "1-0"
+                    } else {
+                        "0-1"
+                    },
+                Self::Draw(_) => "1/2-1/2",
+            }
+        )
+    }
+}
+
 /// Represents types of wins.
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub enum WinType {
@@ -797,6 +835,7 @@ impl Color {
 impl TryFrom<&str> for Color {
     type Error = String;
 
+    /// Attempts to convert a color character in a string slice to a `Color` ("w" is white, and "b" is black).
     fn try_from(string: &str) -> Result<Self, Self::Error> {
         match string {
             "w" => Ok(Self::White),
@@ -807,6 +846,7 @@ impl TryFrom<&str> for Color {
 }
 
 impl From<Color> for char {
+    /// Converts a `Color` to a color character (white is 'w', and black is 'b').
     fn from(c: Color) -> char {
         match c {
             Color::White => 'w',

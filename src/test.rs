@@ -300,8 +300,12 @@ fn valid_make_move_san() {
 
 #[test]
 #[ignore]
-fn pgn_tokenize() {
-    let pgn_str = include_str!("../test1.pgn");
+fn pgn() {
+    // Carlsen vs. Nepomniachtchi, 2021 FIDE World Chess Championship: test1.pgn
+    // Mate-in-130 study: test2.pgn
+    // Mate-in-290 study: test3.pgn
+    let pgn_str = include_str!("../test3.pgn");
     let pgn = Pgn::try_from(pgn_str).unwrap();
     println!("{pgn}");
+    std::fs::write("test.txt", pgn.to_string()).unwrap();
 }

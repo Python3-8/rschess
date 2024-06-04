@@ -4,18 +4,19 @@ use std::{collections::HashMap, fmt};
 
 const SEVEN_TAG_ROSTER: [&str; 7] = ["Event", "Site", "Date", "Round", "White", "Black", "Result"];
 
+/// Represents PGN (Portable Game Notation).
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Pgn {
-    pub tag_pairs: HashMap<String, String>,
-    pub board: Board,
+    tag_pairs: HashMap<String, String>,
+    board: Board,
 }
 
 impl Pgn {
     /// Tokenizes PGN text.
     fn tokenize(text: &str) -> Vec<Token> {
         let tag_pair_regex = Regex::new(r#"\[(?<name>[A-Za-z]+)\s*"(?<value>((\\\\)|(\\")|[^"\\])*)"\]"#).unwrap();
-        let fullmove_san_regex = Regex::new(r"(?<move_number>\d+)\.\s*(?<white_move>((O-O(-O)?)|(0-0(-0)?)|([a-h]((x[a-h][1-8])|[1-8]))|([QRBN](([a-h][1-8]x?[a-h][1-8])|([1-8]x?[a-h][1-8])|([a-h]x?[a-h][1-8])|(x?[a-h][1-8])))|(Kx?[a-h][1-8]))\+?)\s(?<black_move>((O-O(-O)?)|(0-0(-0)?)|([a-h]((x[a-h][1-8])|[1-8]))|([QRBN](([a-h][1-8]x?[a-h][1-8])|([1-8]x?[a-h][1-8])|([a-h]x?[a-h][1-8])|(x?[a-h][1-8])))|(Kx?[a-h][1-8]))[+#]?)").unwrap();
-        let halfmove_san_regex = Regex::new(r"(?<move_number>\d+)\.\s*(?<halfmove>((O-O(-O)?)|(0-0(-0)?)|([a-h]((x[a-h][1-8])|[1-8]))|([QRBN](([a-h][1-8]x?[a-h][1-8])|([1-8]x?[a-h][1-8])|([a-h]x?[a-h][1-8])|(x?[a-h][1-8])))|(Kx?[a-h][1-8]))[+#]?)(\s*$|\s+\d)").unwrap();
+        let fullmove_san_regex = Regex::new(r"(?<move_number>\d+)\.\s*(?<white_move>((O-O(-O)?)|(0-0(-0)?)|([a-h]((x[a-h][1-8])|[1-8])(=[QRBN])?)|([QRBN](([a-h][1-8]x?[a-h][1-8])|([1-8]x?[a-h][1-8])|([a-h]x?[a-h][1-8])|(x?[a-h][1-8])))|(Kx?[a-h][1-8]))\+?)\s+(?<black_move>((O-O(-O)?)|(0-0(-0)?)|([a-h]((x[a-h][1-8])|[1-8])(=[QRBN])?)|([QRBN](([a-h][1-8]x?[a-h][1-8])|([1-8]x?[a-h][1-8])|([a-h]x?[a-h][1-8])|(x?[a-h][1-8])))|(Kx?[a-h][1-8]))[+#]?)").unwrap();
+        let halfmove_san_regex = Regex::new(r"(?<move_number>\d+)\.\s*(?<halfmove>((O-O(-O)?)|(0-0(-0)?)|([a-h]((x[a-h][1-8])|[1-8])(=[QRBN])?)|([QRBN](([a-h][1-8]x?[a-h][1-8])|([1-8]x?[a-h][1-8])|([a-h]x?[a-h][1-8])|(x?[a-h][1-8])))|(Kx?[a-h][1-8]))[+#]?)(\s*$|\s+\d)").unwrap();
         let result_regex = Regex::new(r"^(\n|.)*(?<white_score>0|1\/2|1)-(?<black_score>0|1\/2|1)\s*$").unwrap();
         let mut tokens = Vec::new();
         for caps in tag_pair_regex.captures_iter(text) {
@@ -140,20 +141,50 @@ impl Pgn {
         }
         Ok(Self { tag_pairs, board })
     }
+
+    /// Constructs a `Pgn` object from a `Board`.
+    /// Tag pairs must be provided, following the Seven Tag Roster (<https://en.wikipedia.org/wiki/Portable_Game_Notation#Seven_Tag_Roster>),
+    /// except the _Result_ tag which will be retrieved from the game state.
+    pub fn from_board(board: Board, tag_pairs: Vec<(String, String)>) -> Result<Self, String> {
+        let tag_pair_names = tag_pairs.iter().map(|(t, _)| t.as_str()).collect::<Vec<_>>();
+        let mut required_tags = SEVEN_TAG_ROSTER.iter().take(6);
+        if required_tags.any(|tag| !tag_pair_names.contains(tag)) {
+            return Err("Invalid PGN: the Seven Tag Roster (https://en.wikipedia.org/wiki/Portable_Game_Notation#Seven_Tag_Roster) must be followed".to_owned());
+        }
+        let mut tag_pairs_hm = HashMap::new();
+        for (name, value) in tag_pairs.into_iter() {
+            tag_pairs_hm.insert(name, value);
+        }
+        Ok(Self { board, tag_pairs: tag_pairs_hm })
+    }
+
+    /// Returns the PGN's tag pairs.
+    pub fn tag_pairs(&self) -> &HashMap<String, String> {
+        &self.tag_pairs
+    }
+
+    /// Returns the game that the PGN represents.
+    pub fn board(&self) -> &Board {
+        &self.board
+    }
 }
 
 impl TryFrom<&str> for Pgn {
     type Error = String;
 
+    /// Attempts to parse a PGN text, returning an error if it is invalid. Note that this method is not
+    /// a PGN validator, meaning it may sometimes accept invalid PGN as valid.
     fn try_from(text: &str) -> Result<Pgn, Self::Error> {
         Self::parse(Self::tokenize(text))
     }
 }
 
 impl fmt::Display for Pgn {
+    /// Represents the `Pgn` object as PGN text.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut pgn = String::new();
         let mut tag_pairs = self.tag_pairs.clone();
+        tag_pairs.insert("FEN".to_owned(), self.board.initial_fen.to_string());
         for &name in &SEVEN_TAG_ROSTER {
             tag_pairs.remove(name);
             let line = format!(r#"[{name} "{}"]{}"#, self.tag_pairs.get(name).unwrap(), "\n");
@@ -170,14 +201,8 @@ impl fmt::Display for Pgn {
         pgn.push_str(&format!(
             " {}",
             match self.board.game_result() {
-                Some(GameResult::Wins(c, _)) =>
-                    if c.is_white() {
-                        "1-0"
-                    } else {
-                        "0-1"
-                    },
-                Some(GameResult::Draw(_)) => "1/2-1/2",
-                None => "*",
+                Some(res) => res.to_string(),
+                None => "*".to_owned(),
             }
         ));
         write!(f, "{pgn}")
