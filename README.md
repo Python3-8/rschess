@@ -53,8 +53,8 @@ assert_eq!(board.gen_legal_moves().len(), 0); // confirms that there are no lega
 # Aim
 rschess is yet another chess library for Rust, with the aim of being as feature-rich as possible. At the moment, speed optimizations aren't my first priority, but I might get there someday. There are surprisingly very few Rust crates that offer enough features for use in applications related to chess. With rschess I aim to create a library that boasts features of:
 * legal move generation
+* move/position history
 * parsing/generating FEN and PGN
-* move history
 * board status (ongoing/over, checkmate, types of draws including the rare fivefold repetition and the seventy-five-move rule)
 * generating an image of the chessboard
 * and maybe more!
@@ -62,7 +62,8 @@ rschess is yet another chess library for Rust, with the aim of being as feature-
 # Progress
 At the moment, rschess has:
 * legal move generation
-* parsing/generating FEN
+* move/position history
+* parsing/generating FEN and PGN
 * parsing/interpreting/generating UCI and SAN
 * board status
 * pretty-printing

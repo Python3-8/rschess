@@ -371,7 +371,7 @@ impl Board {
                 movetext.push_str(&format!("{}{san} ", if movei == 0 { format!("{current_fullmove_number}... ") } else { String::new() }));
                 current_fullmove_number += 1;
             } else {
-                movetext.push_str(&format!("{current_fullmove_number}. {san} "))
+                movetext.push_str(&format!("{current_fullmove_number}. {san} "))
             }
             current_side = !current_side;
         }
