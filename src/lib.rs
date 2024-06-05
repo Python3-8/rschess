@@ -48,16 +48,34 @@
 //! assert_eq!(board.gen_legal_moves().len(), 0); // confirms that there are no legal moves because the game is over
 //! ```
 mod board;
+pub mod errors;
 mod fen;
 mod helpers;
 mod pgn;
 mod position;
 
 pub use board::Board;
+pub(crate) use errors::*;
 pub use fen::Fen;
 pub use pgn::Pgn;
 pub use position::Position;
 use std::{fmt, ops::Not};
+
+/// Converts a square index (`0..64`) to a square name, returning an error if the square index is invalid.
+pub fn idx_to_sq(idx: usize) -> Result<(char, char), InvalidSquareIndexError> {
+    if !(0..64).contains(&idx) {
+        return Err(InvalidSquareIndexError(idx));
+    }
+    Ok(helpers::idx_to_sq(idx))
+}
+
+/// Converts a square name to a square index, returning an error if the square name is invalid.
+pub fn sq_to_idx(file: char, rank: char) -> Result<usize, InvalidSquareNameError> {
+    if !(('a'..'h').contains(&file) && ('1'..'8').contains(&rank)) {
+        return Err(InvalidSquareNameError(file, rank));
+    }
+    Ok(helpers::sq_to_idx(file, rank))
+}
 
 /// Represents a piece in the format (_piece type_, _color_).
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
@@ -76,7 +94,7 @@ impl Piece {
 }
 
 impl TryFrom<char> for Piece {
-    type Error = String;
+    type Error = InvalidPieceCharacterError;
 
     /// Attempts to convert a piece character to a `Piece`.
     fn try_from(value: char) -> Result<Self, Self::Error> {
@@ -107,12 +125,12 @@ pub enum PieceType {
 }
 
 impl TryFrom<char> for PieceType {
-    type Error = String;
+    type Error = InvalidPieceCharacterError;
 
     /// Attempts to convert a piece character to a `PieceType`.
     fn try_from(value: char) -> Result<Self, Self::Error> {
         if !value.is_ascii_alphanumeric() {
-            return Err(format!("Invalid piece character: '{value}' is not ASCII alphanumeric"));
+            return Err(InvalidPieceCharacterError(value));
         }
         Ok(match value.to_ascii_lowercase() {
             'k' => Self::K,
@@ -121,7 +139,7 @@ impl TryFrom<char> for PieceType {
             'n' => Self::N,
             'r' => Self::R,
             'p' => Self::P,
-            _ => return Err(format!("Invalid piece character: '{value}' does not correspond to any chess piece")),
+            _ => return Err(InvalidPieceCharacterError(value)),
         })
     }
 }
@@ -161,23 +179,30 @@ impl Move {
     }
 
     /// Creates a `Move` object from its UCI representation.
-    pub fn from_uci(uci: &str) -> Result<Self, String> {
+    pub fn from_uci(uci: &str) -> Result<Self, InvalidUciError> {
         let uci_len = uci.len();
         if ![4, 5].contains(&uci_len) {
-            return Err(format!("Invalid UCI: Expected string to be 4 or 5 characters long, got {uci_len}"));
+            return Err(InvalidUciError::Length);
         }
         let from_square = (uci.chars().next().unwrap(), uci.chars().nth(1).unwrap());
         let to_square = (uci.chars().nth(2).unwrap(), uci.chars().nth(3).unwrap());
         let promotion = uci.chars().nth(4);
         if !(('a'..='h').contains(&from_square.0) && ('1'..='8').contains(&from_square.1)) {
-            return Err(format!("Invalid UCI: '{}{}' is not a valid square name", from_square.0, from_square.1));
+            return Err(InvalidUciError::InvalidSquareName(from_square.0, from_square.1));
         }
         if !(('a'..='h').contains(&to_square.0) && ('1'..='8').contains(&to_square.1)) {
-            return Err(format!("Invalid UCI: '{}{}' is not a valid square name", to_square.0, to_square.1));
+            return Err(InvalidUciError::InvalidSquareName(to_square.0, to_square.1));
         }
         let (src, dest) = (helpers::sq_to_idx(from_square.0, from_square.1), helpers::sq_to_idx(to_square.0, to_square.1));
         let promotion = match promotion {
-            Some(p) => Some(PieceType::try_from(p)?),
+            Some(p) => Some({
+                let pt = PieceType::try_from(p).map_err(|_| InvalidUciError::InvalidPieceType(p))?;
+                if pt == PieceType::K {
+                    return Err(InvalidUciError::InvalidPieceType(p));
+                } else {
+                    pt
+                }
+            }),
             _ => None,
         };
         Ok(Self(
@@ -200,6 +225,13 @@ impl Move {
                 _ => String::new(),
             }
         )
+    }
+}
+
+impl fmt::Display for Move {
+    /// Converts the move to a UCI string.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_uci())
     }
 }
 
@@ -268,14 +300,14 @@ impl Color {
 }
 
 impl TryFrom<&str> for Color {
-    type Error = String;
+    type Error = InvalidColorCharacterError;
 
     /// Attempts to convert a color character in a string slice to a `Color` ("w" is white, and "b" is black).
     fn try_from(string: &str) -> Result<Self, Self::Error> {
         match string {
             "w" => Ok(Self::White),
             "b" => Ok(Self::Black),
-            _ => Err(format!("Color character must be 'w' or 'b', got '{string}'")),
+            _ => Err(InvalidColorCharacterError(string.to_string())),
         }
     }
 }
@@ -310,18 +342,6 @@ pub enum SpecialMoveType {
     EnPassant,
     Unclear,
 }
-
-/// The error type used to convey the illegality of a move
-#[derive(Debug)]
-pub struct IllegalMoveError;
-
-impl fmt::Display for IllegalMoveError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Illegal move: This move is illegal")
-    }
-}
-
-impl std::error::Error for IllegalMoveError {}
 
 #[cfg(test)]
 mod test;

@@ -1,4 +1,4 @@
-use super::{helpers, Color, IllegalMoveError, Move, Piece, PieceType, SpecialMoveType};
+use super::{helpers, Color, IllegalMoveError, InvalidSanMoveError, Move, Piece, PieceType, SpecialMoveType};
 use std::collections::HashMap;
 
 /// The structure for a chess position
@@ -97,7 +97,7 @@ impl Position {
         let legal = self.gen_non_illegal_moves();
         let move_ = match helpers::as_legal(move_, &legal) {
             Some(m) => m,
-            _ => return Err(IllegalMoveError),
+            _ => return Err(IllegalMoveError(move_)),
         };
         let mut san = String::new();
         let Move(src, dest, spec) = move_;
@@ -222,19 +222,19 @@ impl Position {
     }
 
     /// Constructs a `Move` from a SAN representation, returning an error if it is invalid or illegal.
-    pub fn san_to_move(&self, san: &str) -> Result<Move, String> {
+    pub fn san_to_move(&self, san: &str) -> Result<Move, InvalidSanMoveError> {
         let san = san.replace('0', "O").replace(['+', '#'], "");
         self.gen_non_illegal_moves()
             .into_iter()
             .find(|&m| self.move_to_san(m).unwrap().replace(['+', '#'], "") == san)
-            .ok_or("Invalid SAN: This SAN is either invalid or illegal in this position".to_owned())
+            .ok_or(InvalidSanMoveError(san.to_owned()))
     }
 
     /// Returns the position which would occur if the given move is played, returning an error if the move is illegal.
     pub fn make_move(&self, move_: Move) -> Result<Self, IllegalMoveError> {
         let move_ = match helpers::as_legal(move_, &self.gen_non_illegal_moves()) {
             Some(m) => m,
-            _ => return Err(IllegalMoveError),
+            _ => return Err(IllegalMoveError(move_)),
         };
         let castling_rights_idx_offset = if self.side.is_white() { 0 } else { 2 };
         let Self {
@@ -595,7 +595,7 @@ impl Position {
     }
 
     /// Counts the material on the board. This function is used by [`Position::is_insufficient_material`] to determine whether there is insufficient checkmating material.
-    pub fn count_material(&self) -> Vec<Material> {
+    pub(crate) fn count_material(&self) -> Vec<Material> {
         let mut material = Vec::new();
         for sq in 0..64 {
             if let Some(Piece(piece_type, _)) = self.content[sq] {

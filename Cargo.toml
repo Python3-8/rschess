@@ -9,3 +9,4 @@ license = "MIT"
 
 [dependencies]
 regex = "1.10.4"
+thiserror = "1.0.61"

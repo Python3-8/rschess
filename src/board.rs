@@ -1,4 +1,4 @@
-use super::{helpers, Color, DrawType, Fen, GameResult, IllegalMoveError, Move, Piece, PieceType, Position, WinType};
+use super::{helpers, Color, DrawType, Fen, GameOverError, GameResult, IllegalMoveError, InvalidSanMoveError, InvalidSquareNameError, InvalidUciMoveError, Move, Piece, PieceType, Position, WinType};
 
 /// The structure for a chessboard/game
 #[derive(Eq, PartialEq, Clone, Debug)]
@@ -53,18 +53,18 @@ impl Board {
 
     /// Represents a `Move` in SAN, returning an error if the move is illegal.
     pub fn move_to_san(&self, move_: Move) -> Result<String, IllegalMoveError> {
-        let move_ = helpers::as_legal(move_, &self.gen_legal_moves()).ok_or(IllegalMoveError)?;
+        let move_ = helpers::as_legal(move_, &self.gen_legal_moves()).ok_or(IllegalMoveError(move_))?;
         self.position.move_to_san(move_)
     }
 
     /// Constructs a `Move` from a SAN representation, returning an error if it is invalid or illegal.
-    pub fn san_to_move(&self, san: &str) -> Result<Move, String> {
+    pub fn san_to_move(&self, san: &str) -> Result<Move, InvalidSanMoveError> {
         match self.position.san_to_move(san) {
             Ok(m) => {
                 if self.is_legal(m) {
                     Ok(m)
                 } else {
-                    Err(format!("Invalid SAN: this move '{san}' is illegal in this position"))
+                    Err(InvalidSanMoveError(san.to_owned()))
                 }
             }
             e => e,
@@ -89,7 +89,7 @@ impl Board {
     pub fn make_move(&mut self, move_: Move) -> Result<(), IllegalMoveError> {
         let move_ = match helpers::as_legal(move_, &self.gen_legal_moves()) {
             Some(m) => m,
-            _ => return Err(IllegalMoveError),
+            _ => return Err(IllegalMoveError(move_)),
         };
         let mut halfmove_clock = self.halfmove_clock;
         let fullmove_number = self.fullmove_number + if self.position.side.is_black() { 1 } else { 0 };
@@ -109,15 +109,15 @@ impl Board {
     }
 
     /// Attempts to parse the UCI representation of a move and play it on the board, returning an error if the move is invalid or illegal.
-    pub fn make_move_uci(&mut self, uci: &str) -> Result<(), String> {
-        let move_ = Move::from_uci(uci)?;
-        self.make_move(move_).map_err(|e| format!("{e}"))
+    pub fn make_move_uci(&mut self, uci: &str) -> Result<(), InvalidUciMoveError> {
+        let move_ = Move::from_uci(uci).map_err(|_| InvalidUciMoveError::InvalidUci(uci.to_owned()))?;
+        self.make_move(move_).map_err(|_| InvalidUciMoveError::IllegalMove(uci.to_owned()))
     }
 
     /// Attempts to interpret the SAN representation of a move and play it on the board, returning an error if it is invalid or illegal.
-    pub fn make_move_san(&mut self, san: &str) -> Result<(), String> {
+    pub fn make_move_san(&mut self, san: &str) -> Result<(), InvalidSanMoveError> {
         let move_ = self.san_to_move(san)?;
-        self.make_move(move_).map_err(|e| format!("{e}"))
+        self.make_move(move_).map_err(|_| InvalidSanMoveError(san.to_owned()))
     }
 
     /// Updates the `ongoing` property of the `Board` if the game is over
@@ -253,20 +253,14 @@ impl Board {
     }
 
     /// Returns the occupant of a square, or an error if the square name is invalid.
-    pub fn occupant_of_square(&self, file: char, rank: char) -> Result<Option<Piece>, String> {
-        if !('a'..'h').contains(&file) {
-            return Err(format!("Invalid file name: {file}"));
-        }
-        if !('1'..'8').contains(&rank) {
-            return Err(format!("Invalid rank: {rank}"));
-        }
-        Ok(self.position.content[helpers::sq_to_idx(file, rank)])
+    pub fn occupant_of_square(&self, file: char, rank: char) -> Result<Option<Piece>, InvalidSquareNameError> {
+        Ok(self.position.content[super::sq_to_idx(file, rank)?])
     }
 
     /// Resigns the game for a certain side, if the game is ongoing. Currently, this function should also be used to represent a loss by timeout.
-    pub fn resign(&mut self, side: Color) -> Result<(), String> {
+    pub fn resign(&mut self, side: Color) -> Result<(), GameOverError> {
         if !self.ongoing {
-            return Err("A player cannot resign when the game is already over".to_owned());
+            return Err(GameOverError::Resignation);
         }
         self.ongoing = false;
         self.resigned_side = Some(side);
@@ -274,9 +268,9 @@ impl Board {
     }
 
     /// Makes a draw by agreement, if the game is ongoing. Currently, this function should also be used to represent a draw claim.
-    pub fn agree_draw(&mut self) -> Result<(), String> {
+    pub fn agree_draw(&mut self) -> Result<(), GameOverError> {
         if !self.ongoing {
-            return Err("Players cannot agree to a draw when the game is already over".to_owned());
+            return Err(GameOverError::AgreementDraw);
         }
         self.ongoing = false;
         self.draw_agreed = true;

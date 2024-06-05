@@ -1,4 +1,4 @@
-use super::{Board, Color, Fen, GameResult};
+use super::{Board, Color, Fen, GameResult, InvalidPgnError};
 use regex::Regex;
 use std::{collections::HashMap, fmt};
 
@@ -35,7 +35,8 @@ impl Pgn {
     }
 
     /// Parses PGN from a collection of PGN tokens.
-    fn parse(tokens: Vec<Token>) -> Result<Pgn, String> {
+    /// This function currently does **not** support PGN annotations.
+    fn parse(tokens: Vec<Token>) -> Result<Pgn, InvalidPgnError> {
         let mut tag_pairs_done = false;
         let mut fullmove_san_done = false;
         let mut halfmove_san_done = false;
@@ -47,40 +48,40 @@ impl Pgn {
             match token {
                 Token::TagPair(name, value) => {
                     if tag_pairs_done || fullmove_san_done || halfmove_san_done || result_done {
-                        return Err("Invalid PGN: all tag pairs must be in the beginning of the text".to_owned());
+                        return Err(InvalidPgnError::OrderOfElements("all tag pairs must be in the beginning of the text".to_owned()));
                     }
                     tag_pairs.insert(name, value);
                 }
                 Token::FullmoveSan(n, w, b) => {
                     if n < 1 {
-                        return Err("Invalid PGN: move numbers cannot be less than 1".to_owned());
+                        return Err(InvalidPgnError::InvalidMoveNumber);
                     }
                     if fullmove_san_done || halfmove_san_done || result_done {
-                        return Err("Invalid PGN: variations are not yet supported; all movetext must include only fullmoves and a halfmove is only allowed on the last move.".to_owned());
+                        return Err(InvalidPgnError::NoAnnotations);
                     }
                     if !tag_pairs_done {
                         tag_pairs_done = true;
                     }
                     if let Some((prevn, _, _)) = moves.last() {
                         if *prevn != n - 1 {
-                            return Err("Invalid PGN: successive moves must differ in move number by 1".to_owned());
+                            return Err(InvalidPgnError::InvalidMoveNumber);
                         }
                     }
                     moves.push((n, Some(w), Some(b)));
                 }
                 Token::HalfmoveSan(n, w) => {
                     if n < 1 {
-                        return Err("Invalid PGN: move numbers cannot be less than 1".to_owned());
+                        return Err(InvalidPgnError::InvalidMoveNumber);
                     }
                     if halfmove_san_done || result_done {
-                        return Err("Invalid PGN: variations are not yet supported; all movetext must include only fullmoves and a halfmove is only allowed on the last move.".to_owned());
+                        return Err(InvalidPgnError::NoAnnotations);
                     }
                     if !fullmove_san_done {
                         fullmove_san_done = true;
                     }
                     if let Some((prevn, _, _)) = moves.last() {
                         if *prevn != n - 1 {
-                            return Err("Invalid PGN: successive moves must differ in move number by 1".to_owned());
+                            return Err(InvalidPgnError::InvalidMoveNumber);
                         }
                     }
                     moves.push((n, Some(w), None));
@@ -90,7 +91,7 @@ impl Pgn {
                         halfmove_san_done = true;
                     }
                     if result_done {
-                        return Err("Invalid PGN: there can only be one game result".to_owned());
+                        return Err(InvalidPgnError::OrderOfElements("there can only be one game result".to_owned()));
                     }
                     result_done = true;
                     result = Some((w, b));
@@ -98,7 +99,7 @@ impl Pgn {
             }
         }
         if SEVEN_TAG_ROSTER.iter().any(|&k| !tag_pairs.contains_key(k)) {
-            return Err("Invalid PGN: the Seven Tag Roster (https://en.wikipedia.org/wiki/Portable_Game_Notation#Seven_Tag_Roster) must be followed".to_owned());
+            return Err(InvalidPgnError::SevenTagRoster);
         }
         let mut board = match tag_pairs.get("FEN") {
             Some(fen) => Board::from_fen(Fen::try_from(fen.as_str()).unwrap()),
@@ -106,26 +107,26 @@ impl Pgn {
         };
         for (_, w, b) in moves {
             if let Some(m) = w {
-                board.make_move_san(&m)?;
+                board.make_move_san(&m).map_err(|e| InvalidPgnError::InvalidMove(e))?;
             }
             if let Some(m) = b {
-                board.make_move_san(&m)?;
+                board.make_move_san(&m).map_err(|e| InvalidPgnError::InvalidMove(e))?;
             }
         }
         match board.game_result() {
             Some(GameResult::Wins(Color::White, _)) => {
                 if result != Some(("1".to_owned(), "0".to_owned())) {
-                    return Err("Invalid PGN: white has won on the board but the result is not 1-0".to_owned());
+                    return Err(InvalidPgnError::InvalidResult("white has won on the board but the result is not 1-0".to_owned()));
                 }
             }
             Some(GameResult::Wins(Color::Black, _)) => {
                 if result != Some(("0".to_owned(), "1".to_owned())) {
-                    return Err("Invalid PGN: black has won on the board but the result is not 0-1".to_owned());
+                    return Err(InvalidPgnError::InvalidResult("black has won on the board but the result is not 0-1".to_owned()));
                 }
             }
             Some(GameResult::Draw(_)) => {
                 if result != Some(("1/2".to_owned(), "1/2".to_owned())) {
-                    return Err("Invalid PGN: the game has been drawn but the result is not 1/2-1/2".to_owned());
+                    return Err(InvalidPgnError::InvalidResult("the game has been drawn but the result is not 1/2-1/2".to_owned()));
                 }
             }
             None => {
@@ -134,7 +135,7 @@ impl Pgn {
                         ("1", "0") => board.resign(Color::Black).unwrap(),
                         ("0", "1") => board.resign(Color::White).unwrap(),
                         ("1/2", "1/2") => board.agree_draw().unwrap(),
-                        _ => return Err(format!("Invalid PGN: {}-{} is not a valid result", res.0, res.1)),
+                        _ => return Err(InvalidPgnError::InvalidResult(format!("{}-{} is not a valid result", res.0, res.1))),
                     }
                 }
             }
@@ -145,11 +146,11 @@ impl Pgn {
     /// Constructs a `Pgn` object from a `Board`.
     /// Tag pairs must be provided, following the Seven Tag Roster (<https://en.wikipedia.org/wiki/Portable_Game_Notation#Seven_Tag_Roster>),
     /// except the _Result_ tag which will be retrieved from the game state.
-    pub fn from_board(board: Board, tag_pairs: Vec<(String, String)>) -> Result<Self, String> {
+    pub fn from_board(board: Board, tag_pairs: Vec<(String, String)>) -> Result<Self, InvalidPgnError> {
         let tag_pair_names = tag_pairs.iter().map(|(t, _)| t.as_str()).collect::<Vec<_>>();
         let mut required_tags = SEVEN_TAG_ROSTER.iter().take(6);
         if required_tags.any(|tag| !tag_pair_names.contains(tag)) {
-            return Err("Invalid PGN: the Seven Tag Roster (https://en.wikipedia.org/wiki/Portable_Game_Notation#Seven_Tag_Roster) must be followed".to_owned());
+            return Err(InvalidPgnError::SevenTagRoster);
         }
         let mut tag_pairs_hm = HashMap::new();
         for (name, value) in tag_pairs.into_iter() {
@@ -170,10 +171,11 @@ impl Pgn {
 }
 
 impl TryFrom<&str> for Pgn {
-    type Error = String;
+    type Error = InvalidPgnError;
 
-    /// Attempts to parse a PGN text, returning an error if it is invalid. Note that this method is not
-    /// a PGN validator, meaning it may sometimes accept invalid PGN as valid.
+    /// Attempts to parse a PGN text, returning an error if it is invalid.
+    /// This function does **not** support PGN annotations.
+    /// Note that this function is not a PGN validator, meaning it may sometimes accept invalid PGN as valid.
     fn try_from(text: &str) -> Result<Pgn, Self::Error> {
         Self::parse(Self::tokenize(text))
     }
