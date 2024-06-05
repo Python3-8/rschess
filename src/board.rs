@@ -44,7 +44,11 @@ impl Board {
 
     /// Returns a `Fen` object representing the `Board`.
     pub fn to_fen(&self) -> Fen {
-        Fen::new(self.position.clone(), self.halfmove_clock, self.fullmove_number).unwrap()
+        Fen {
+            position: self.position.clone(),
+            halfmove_clock: self.halfmove_clock,
+            fullmove_number: self.fullmove_number,
+        }
     }
 
     /// Represents a `Move` in SAN, returning an error if the move is illegal.
@@ -315,6 +319,7 @@ impl Board {
         movetext.trim().to_owned()
     }
 
+    /// Returns the current `Position` on the board.
     pub fn position(&self) -> &Position {
         &self.position
     }

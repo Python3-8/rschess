@@ -4,33 +4,23 @@ use std::fmt;
 /// Represents FEN (Forsyth-Edwards Notation).
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Fen {
-    position: Position,
-    halfmove_clock: usize,
-    fullmove_number: usize,
+    pub(crate) position: Position,
+    pub(crate) halfmove_clock: usize,
+    pub(crate) fullmove_number: usize,
 }
 
 impl Fen {
-    pub fn new(position: Position, halfmove_clock: usize, fullmove_number: usize) -> Result<Self, String> {
-        if halfmove_clock > 150 {
-            return Err(format!("Invalid FEN: halfmove clock must range from 0 to 150, got {halfmove_clock}"));
-        } else if fullmove_number < 1 {
-            return Err(format!("Invalid FEN: fullmove number must be greater than zero, got {fullmove_number}"));
-        }
-        Ok(Self {
-            position,
-            halfmove_clock,
-            fullmove_number,
-        })
-    }
-
+    /// Returns the position represented by the `Fen` object.
     pub fn position(&self) -> &Position {
         &self.position
     }
 
+    /// Returns the halfmove clock.
     pub fn halfmove_clock(&self) -> usize {
         self.halfmove_clock
     }
 
+    /// Returns the fullmove number.
     pub fn fullmove_number(&self) -> usize {
         self.fullmove_number
     }

@@ -5,13 +5,13 @@ use std::collections::HashMap;
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Position {
     /// The board content; each square is represented by a number 0..64 where a1 is 0 and h8 is 63
-    pub content: [Option<Piece>; 64],
+    pub(crate) content: [Option<Piece>; 64],
     /// The side to move; white is `true` and black is `false`
-    pub side: Color,
+    pub(crate) side: Color,
     /// The indices of rook locations representing castling rights for both sides in the format [K, Q, k, q]
-    pub castling_rights: [Option<usize>; 4],
+    pub(crate) castling_rights: [Option<usize>; 4],
     /// The index of the en passant target square, 0..64
-    pub ep_target: Option<usize>,
+    pub(crate) ep_target: Option<usize>,
 }
 
 impl Position {
@@ -390,7 +390,7 @@ impl Position {
     }
 
     /// Generates the pseudolegal moves in the position.
-    pub fn gen_pseudolegal_moves(&self) -> Vec<Move> {
+    pub(crate) fn gen_pseudolegal_moves(&self) -> Vec<Move> {
         let Self {
             content,
             castling_rights,
@@ -542,7 +542,7 @@ impl Position {
     }
 
     /// Generates pseudolegal moves for a long-range piece.
-    pub fn gen_long_range_piece_pseudolegal_moves(&self, sq: usize, piece_type: PieceType) -> Vec<Move> {
+    pub(crate) fn gen_long_range_piece_pseudolegal_moves(&self, sq: usize, piece_type: PieceType) -> Vec<Move> {
         let Self { content, side, .. } = self;
         let axes = match piece_type {
             PieceType::Q => vec![1, 8, 7, 9],
@@ -610,6 +610,7 @@ impl Position {
         material
     }
 
+    /// Checks whether the game is drawn by insufficient material.
     pub fn is_insufficient_material(&self) -> bool {
         let copy1 = self.count_material();
         let (mut copy2, copy3, mut copy4) = (copy1.clone(), copy1.clone(), copy1.clone());
