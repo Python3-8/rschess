@@ -58,7 +58,7 @@ fn board_to_fen() {
 #[test]
 fn pseudolegal_moves() {
     let check = |board: Board, legal: &[Move]| {
-        let moves = board.position.gen_pseudolegal_moves();
+        let moves = board.position().gen_pseudolegal_moves();
         assert_eq!(moves, legal);
     };
     let board = Board::default();

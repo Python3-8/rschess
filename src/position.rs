@@ -345,17 +345,17 @@ impl Position {
             .collect()
     }
 
-    /// Checks whether the game is drawn by stalemate. Use [`Board::stalemated_side`] to know which side is in stalemate.
+    /// Checks whether the game is drawn by stalemate. Use [`Position::stalemated_side`] to know which side is in stalemate.
     pub fn is_stalemate(&self) -> bool {
         !self.is_check() && self.gen_non_illegal_moves().is_empty()
     }
 
-    /// Checks whether any side is in check (a checkmate is also considered a check). Use [`Board::checked_side`] to know which side is in check.
+    /// Checks whether any side is in check (a checkmate is also considered a check). Use [`Position::checked_side`] to know which side is in check.
     pub fn is_check(&self) -> bool {
         self.checked_side().is_some()
     }
 
-    /// Checks whether any side is in checkmate. Use [`Board::checkmated_side`] to know which side is in checkmate.
+    /// Checks whether any side is in checkmate. Use [`Position::checkmated_side`] to know which side is in checkmate.
     pub fn is_checkmate(&self) -> bool {
         self.is_check() && self.gen_non_illegal_moves().is_empty()
     }

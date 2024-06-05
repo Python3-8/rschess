@@ -184,7 +184,7 @@ impl fmt::Display for Pgn {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut pgn = String::new();
         let mut tag_pairs = self.tag_pairs.clone();
-        tag_pairs.insert("FEN".to_owned(), self.board.initial_fen.to_string());
+        tag_pairs.insert("FEN".to_owned(), self.board.initial_fen().to_string());
         for &name in &SEVEN_TAG_ROSTER {
             tag_pairs.remove(name);
             let line = format!(r#"[{name} "{}"]{}"#, self.tag_pairs.get(name).unwrap(), "\n");
