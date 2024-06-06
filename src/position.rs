@@ -1,5 +1,4 @@
 use super::{helpers, Color, IllegalMoveError, InvalidSanMoveError, Move, Piece, PieceType, SpecialMoveType};
-use std::collections::HashMap;
 
 /// The structure for a chess position
 #[derive(Eq, PartialEq, Clone, Debug)]
@@ -274,25 +273,11 @@ impl Position {
     /// Pretty-prints the position to a string, from the perspective of the side `perspective`.
     pub fn pretty_print(&self, perspective: Color) -> String {
         let mut string = String::new();
-        let codepoints = HashMap::from([
-            (PieceType::K, 0x2654),
-            (PieceType::Q, 0x2655),
-            (PieceType::R, 0x2656),
-            (PieceType::B, 0x2657),
-            (PieceType::N, 0x2658),
-            (PieceType::P, 0x2659),
-        ]);
         if perspective.is_white() {
             for (ranki, rank) in self.content.chunks(8).rev().enumerate() {
                 string += &format!("{} |", 8 - ranki);
                 for (sqi, occupant) in rank.iter().enumerate() {
-                    string += &format!(
-                        " {} ",
-                        match occupant {
-                            Some(Piece(t, c)) => char::from_u32((codepoints.get(t).unwrap() + if c.is_white() { 0 } else { 6 }) as u32).unwrap(),
-                            None => ' ',
-                        }
-                    );
+                    string += &format!(" {} ", if let Some(p) = occupant { format!("{p}").chars().next().unwrap() } else { ' ' });
                     if sqi != 7 {
                         string.push('|');
                     }
@@ -306,13 +291,7 @@ impl Position {
             for (ranki, rank) in self.content.chunks(8).enumerate() {
                 string += &format!("{} |", ranki + 1);
                 for (sqi, occupant) in rank.iter().rev().enumerate() {
-                    string += &format!(
-                        " {} ",
-                        match occupant {
-                            Some(Piece(t, c)) => char::from_u32((codepoints.get(t).unwrap() + if c.is_white() { 0 } else { 6 }) as u32).unwrap(),
-                            None => ' ',
-                        }
-                    );
+                    string += &format!(" {} ", if let Some(p) = occupant { format!("{p}").chars().next().unwrap() } else { ' ' });
                     if sqi != 7 {
                         string.push('|');
                     }

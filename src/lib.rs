@@ -47,10 +47,12 @@
 //! assert_eq!(board.fullmove_number(), 10); // confirms that the current fullmove number is 10
 //! assert_eq!(board.gen_legal_moves().len(), 0); // confirms that there are no legal moves because the game is over
 //! ```
+
 mod board;
 pub mod errors;
 mod fen;
 mod helpers;
+pub mod img;
 mod pgn;
 mod position;
 
@@ -59,7 +61,7 @@ pub(crate) use errors::*;
 pub use fen::Fen;
 pub use pgn::Pgn;
 pub use position::Position;
-use std::{fmt, ops::Not};
+use std::{collections::HashMap, fmt, ops::Not};
 
 /// Converts a square index (`0..64`) to a square name, returning an error if the square index is invalid.
 pub fn idx_to_sq(idx: usize) -> Result<(char, char), InvalidSquareIndexError> {
@@ -113,6 +115,21 @@ impl From<Piece> for char {
     }
 }
 
+impl fmt::Display for Piece {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let codepoints = HashMap::from([
+            (PieceType::K, 0x2654),
+            (PieceType::Q, 0x2655),
+            (PieceType::R, 0x2656),
+            (PieceType::B, 0x2657),
+            (PieceType::N, 0x2658),
+            (PieceType::P, 0x2659),
+        ]);
+        let Self(t, c) = self;
+        write!(f, "{}", char::from_u32((codepoints.get(t).unwrap() + if c.is_white() { 0 } else { 6 }) as u32).unwrap())
+    }
+}
+
 /// Represents types of pieces.
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub enum PieceType {
@@ -155,6 +172,12 @@ impl From<PieceType> for char {
             PieceType::R => 'R',
             PieceType::P => 'P',
         }
+    }
+}
+
+impl fmt::Display for PieceType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", char::from(*self))
     }
 }
 
@@ -319,6 +342,12 @@ impl From<Color> for char {
             Color::White => 'w',
             Color::Black => 'b',
         }
+    }
+}
+
+impl fmt::Display for Color {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", char::from(*self))
     }
 }
 

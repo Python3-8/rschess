@@ -1,6 +1,6 @@
 //! Contains all rschess error types.
 
-use super::Move;
+use super::{img::Theme, Move};
 use thiserror::Error;
 
 /// Conveys that the given FEN is invalid.
@@ -97,3 +97,8 @@ pub enum InvalidPgnError {
     #[error("Invalid PGN: invalid result, {0}")]
     InvalidResult(String),
 }
+
+/// Conveys that the given board/piece theme is invalid.
+#[derive(Error, Debug)]
+#[error("Invalid board/piece theme: '{0:?}' is ont a valid theme")]
+pub struct InvalidThemeError<'a>(pub Theme<'a>);

@@ -1,5 +1,4 @@
-use super::helpers;
-use super::{Board, Color, Fen, Move, Pgn, PieceType, SpecialMoveType};
+use super::{helpers, img, Board, Color, Fen, Move, Pgn, PieceType, SpecialMoveType};
 
 #[test]
 fn default_board() {
@@ -308,4 +307,13 @@ fn pgn() {
     let pgn = Pgn::try_from(pgn_str).unwrap();
     println!("{pgn}");
     std::fs::write("test.txt", pgn.to_string()).unwrap();
+}
+
+#[test]
+#[ignore]
+fn position_to_image() {
+    // let board = Board::default();
+    let board = Board::from_fen(Fen::try_from("8/1r6/8/6n1/5k2/1b6/3K3N/7Q b - - 0 1").unwrap());
+    img::position_to_image(board.position(), img::Theme::default(), Color::White).unwrap().save("test1.png").unwrap();
+    img::position_to_image(board.position(), img::Theme::default(), Color::Black).unwrap().save("test2.png").unwrap();
 }
