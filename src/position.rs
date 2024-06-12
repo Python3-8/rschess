@@ -1,4 +1,5 @@
 use super::{helpers, Color, IllegalMoveError, InvalidSanMoveError, Move, Piece, PieceType, SpecialMoveType};
+use std::fmt;
 
 /// The structure for a chess position
 #[derive(Eq, PartialEq, Clone, Debug)]
@@ -283,7 +284,7 @@ impl Position {
                     }
                 }
                 string.push('\n');
-                string += &"⎯".repeat(33);
+                string += &"—".repeat(33);
                 string.push('\n');
             }
             string += "  | a | b | c | d | e | f | g | h";
@@ -297,7 +298,7 @@ impl Position {
                     }
                 }
                 string.push('\n');
-                string += &"⎯".repeat(33);
+                string += &"—".repeat(33);
                 string.push('\n');
             }
             string += "  | h | g | f | e | d | c | d | a";
@@ -554,7 +555,7 @@ impl Position {
     }
 
     /// Checks whether the given side controls a specified square in this position.
-    pub fn controls_square(&self, sq: usize, side: Color) -> bool {
+    pub(crate) fn controls_square(&self, sq: usize, side: Color) -> bool {
         let Self {
             mut content,
             castling_rights,
@@ -619,6 +620,18 @@ impl Position {
             }
         }
         false
+    }
+
+    /// Returns which side's turn it is to move.
+    pub fn side_to_move(&self) -> Color {
+        self.side
+    }
+}
+
+impl fmt::Display for Position {
+    /// Pretty-prints the position from the perspective of the side whose turn it is to move.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.pretty_print(self.side))
     }
 }
 

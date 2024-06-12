@@ -314,6 +314,16 @@ fn pgn() {
 fn position_to_image() {
     // let board = Board::default();
     let board = Board::from_fen(Fen::try_from("8/1r6/8/6n1/5k2/1b6/3K3N/7Q b - - 0 1").unwrap());
-    img::position_to_image(board.position(), img::Theme::default(), Color::White).unwrap().save("test1.png").unwrap();
+    img::position_to_image(
+        board.position(),
+        img::Theme {
+            board_theme: "newspaper",
+            piece_set: "normal",
+        },
+        Color::White,
+    )
+    .unwrap()
+    .save("test1.png")
+    .unwrap();
     img::position_to_image(board.position(), img::Theme::default(), Color::Black).unwrap().save("test2.png").unwrap();
 }

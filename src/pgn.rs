@@ -144,7 +144,7 @@ impl Pgn {
     }
 
     /// Constructs a `Pgn` object from a `Board`.
-    /// Tag pairs must be provided, following the Seven Tag Roster (<https://en.wikipedia.org/wiki/Portable_Game_Notation#Seven_Tag_Roster>),
+    /// Tag pairs must be provided following the [Seven Tag Roster](https://en.wikipedia.org/wiki/Portable_Game_Notation#Seven_Tag_Roster>),
     /// except the _Result_ tag which will be retrieved from the game state.
     pub fn from_board(board: Board, tag_pairs: Vec<(String, String)>) -> Result<Self, InvalidPgnError> {
         let tag_pair_names = tag_pairs.iter().map(|(t, _)| t.as_str()).collect::<Vec<_>>();
@@ -156,6 +156,13 @@ impl Pgn {
         for (name, value) in tag_pairs.into_iter() {
             tag_pairs_hm.insert(name, value);
         }
+        tag_pairs_hm.insert(
+            "Result".to_owned(),
+            match board.game_result() {
+                Some(res) => res.to_string(),
+                None => "*".to_owned(),
+            },
+        );
         Ok(Self { board, tag_pairs: tag_pairs_hm })
     }
 
@@ -195,7 +202,7 @@ impl fmt::Display for Pgn {
         let mut names: Vec<_> = tag_pairs.keys().collect();
         names.sort();
         for name in names {
-            let line = format!(r#"[{name} "{}"]{}"#, self.tag_pairs.get(name).unwrap(), "\n");
+            let line = format!(r#"[{name} "{}"]{}"#, tag_pairs.get(name).unwrap(), "\n");
             pgn.push_str(&line);
         }
         pgn.push('\n');

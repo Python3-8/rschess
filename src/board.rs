@@ -1,4 +1,5 @@
 use super::{helpers, Color, DrawType, Fen, GameOverError, GameResult, IllegalMoveError, InvalidSanMoveError, InvalidSquareNameError, InvalidUciMoveError, Move, Piece, PieceType, Position, WinType};
+use std::fmt;
 
 /// The structure for a chessboard/game
 #[derive(Eq, PartialEq, Clone, Debug)]
@@ -292,7 +293,7 @@ impl Board {
         &self.initial_fen
     }
 
-    /// Generates the SAN movetext of the game thus far (excluding the game result)
+    /// Generates the SAN movetext of the game thus far (excluding the game result).
     pub fn gen_movetext(&self) -> String {
         let mut movetext = String::new();
         let initial_side = self.initial_fen.position().side;
@@ -323,5 +324,12 @@ impl Default for Board {
     /// Constructs a `Board` with the starting position for a chess game.
     fn default() -> Self {
         Self::from_fen(Fen::try_from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap())
+    }
+}
+
+impl fmt::Display for Board {
+    /// Pretty-prints the position on the board from the perspective of the side whose turn it is to move.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.position.fmt(f)
     }
 }
