@@ -2,7 +2,7 @@ use super::{helpers, Color, DrawType, Fen, GameOverError, GameResult, IllegalMov
 use std::fmt;
 
 /// The structure for a chessboard/game
-#[derive(Eq, PartialEq, Clone, Debug)]
+#[derive(Eq, PartialEq, Hash, Clone, Debug)]
 pub struct Board {
     /// The position on the board
     position: Position,
@@ -84,6 +84,14 @@ impl Board {
     /// Checks whether a move is legal in the position.
     pub fn is_legal(&self, move_: Move) -> bool {
         helpers::as_legal(move_, &self.gen_legal_moves()).is_some()
+    }
+
+    /// Checks whether the given move is a capture, returning an error if the move is illegal.
+    pub fn is_capture(&self, move_: Move) -> Result<bool, IllegalMoveError> {
+        if !self.ongoing {
+            return Err(IllegalMoveError(move_));
+        }
+        self.position.is_capture(move_)
     }
 
     /// Plays on the board the given move, returning an error if the move is illegal.

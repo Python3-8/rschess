@@ -34,7 +34,7 @@ pub fn sq_to_idx(file: char, rank: char) -> Result<usize, InvalidSquareNameError
 }
 
 /// Represents a piece in the format (_piece type_, _color_).
-#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub struct Piece(PieceType, Color);
 
 impl Piece {
@@ -136,7 +136,7 @@ impl fmt::Display for PieceType {
 }
 
 /// The structure for a chess move, in the format (_source square_, _destination square_, _castling/promotion/en passant_)
-#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub struct Move(usize, usize, Option<SpecialMoveType>);
 
 impl Move {
@@ -213,7 +213,7 @@ impl fmt::Display for Move {
 }
 
 /// Represents game results.
-#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub enum GameResult {
     Wins(Color, WinType),
     Draw(DrawType),
@@ -239,7 +239,7 @@ impl fmt::Display for GameResult {
 }
 
 /// Represents types of wins.
-#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub enum WinType {
     Checkmate,
     /// Currently, a loss by timeout is also considered a resignation.
@@ -247,7 +247,7 @@ pub enum WinType {
 }
 
 /// Represents types of draws.
-#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub enum DrawType {
     FivefoldRepetition,
     SeventyFiveMoveRule,
@@ -259,7 +259,7 @@ pub enum DrawType {
 }
 
 /// Represents a side/color.
-#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub enum Color {
     White,
     Black,
@@ -318,7 +318,7 @@ impl Not for Color {
 }
 
 /// Represents types of special moves (castling/promotion/en passant).
-#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub enum SpecialMoveType {
     CastlingKingside,
     CastlingQueenside,

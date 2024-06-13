@@ -2,7 +2,7 @@ use super::{helpers, Color, InvalidFenError, Piece, PieceType, Position};
 use std::fmt;
 
 /// Represents FEN (Forsyth-Edwards Notation).
-#[derive(Eq, PartialEq, Clone, Debug)]
+#[derive(Eq, PartialEq, Hash, Clone, Debug)]
 pub struct Fen {
     pub(crate) position: Position,
     pub(crate) halfmove_clock: usize,

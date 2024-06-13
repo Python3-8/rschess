@@ -1,10 +1,20 @@
 use super::{helpers, Color, IllegalMoveError, InvalidSanMoveError, Move, Piece, PieceType, SpecialMoveType};
-use std::fmt;
+use std::{
+    collections::HashMap,
+    fmt,
+    sync::{Mutex, OnceLock},
+};
+
+/// Returns the cached positions and their legal moves.
+fn legal_move_cache() -> &'static Mutex<HashMap<Position, Vec<Move>>> {
+    static LEGAL_MOVE_CACHE: OnceLock<Mutex<HashMap<Position, Vec<Move>>>> = OnceLock::new();
+    LEGAL_MOVE_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
 
 /// The structure for a chess position
-#[derive(Eq, PartialEq, Clone, Debug)]
+#[derive(Eq, PartialEq, Hash, Clone, Debug)]
 pub struct Position {
-    /// The board content; each square is represented by a number 0..64 where a1 is 0 and h8 is 63
+    /// The board content; each square is represented by a number 0..64 where a1 is 0, h1 is 7, and h8 is 63
     pub(crate) content: [Option<Piece>; 64],
     /// The side to move; white is `true` and black is `false`
     pub(crate) side: Color,
@@ -308,8 +318,12 @@ impl Position {
 
     /// Generates the legal moves in the position, assuming the game is ongoing.
     pub fn gen_non_illegal_moves(&self) -> Vec<Move> {
+        if let Some(v) = legal_move_cache().lock().unwrap().get(self) {
+            return v.clone();
+        }
         let Self { content, side, castling_rights, .. } = self;
-        self.gen_pseudolegal_moves()
+        let v: Vec<_> = self
+            .gen_pseudolegal_moves()
             .into_iter()
             .filter(|move_| {
                 if let Move(src, dest, Some(SpecialMoveType::CastlingKingside | SpecialMoveType::CastlingQueenside)) = move_ {
@@ -322,7 +336,9 @@ impl Position {
                 }
                 !helpers::king_capture_pseudolegal(&helpers::change_content(content, move_, castling_rights), !*side)
             })
-            .collect()
+            .collect();
+        legal_move_cache().lock().unwrap().insert(self.clone(), v.clone());
+        v
     }
 
     /// Checks whether the game is drawn by stalemate. Use [`Position::stalemated_side`] to know which side is in stalemate.
@@ -625,6 +641,15 @@ impl Position {
     /// Returns which side's turn it is to move.
     pub fn side_to_move(&self) -> Color {
         self.side
+    }
+
+    /// Checks whether the given move is a capture, returning an error if it is illegal in this position.
+    pub fn is_capture(&self, move_: Move) -> Result<bool, IllegalMoveError> {
+        let move_ = match helpers::as_legal(move_, &self.gen_non_illegal_moves()) {
+            Some(m) => m,
+            _ => return Err(IllegalMoveError(move_)),
+        };
+        Ok(move_.2 == Some(SpecialMoveType::EnPassant) || matches!(self.content[move_.1], Some(_)))
     }
 }
 
