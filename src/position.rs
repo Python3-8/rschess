@@ -649,7 +649,7 @@ impl Position {
             Some(m) => m,
             _ => return Err(IllegalMoveError(move_)),
         };
-        Ok(move_.2 == Some(SpecialMoveType::EnPassant) || matches!(self.content[move_.1], Some(_)))
+        Ok(move_.2 == Some(SpecialMoveType::EnPassant) || self.content[move_.1].is_some())
     }
 }
 

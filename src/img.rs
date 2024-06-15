@@ -82,7 +82,7 @@ pub fn position_to_image<'a>(position: &Position, props: PositionImageProperties
     if size < 8 {
         return Err(InvalidPositionImagePropertiesError::InvalidSize(size));
     }
-    let mut content = position.content.clone().into_iter().enumerate().collect::<Vec<_>>();
+    let mut content = position.content.into_iter().enumerate().collect::<Vec<_>>();
     let ranks: Vec<_> = if perspective.is_white() {
         content.chunks(8).rev().enumerate().collect()
     } else {
@@ -98,7 +98,7 @@ pub fn position_to_image<'a>(position: &Position, props: PositionImageProperties
             let sq_y = ranki * piece_size;
             if let Some(piece) = occ {
                 let piece_svg_path = PathBuf::from("pieces")
-                    .join(format!("{}", piece_set))
+                    .join(piece_set)
                     .join(format!("{}", piece.color()))
                     .join(format!("{}.svg", char::from(*piece)));
                 let piece_svg = nsvg::parse_str(

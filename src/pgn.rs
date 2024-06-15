@@ -107,10 +107,10 @@ impl Pgn {
         };
         for (_, w, b) in moves {
             if let Some(m) = w {
-                board.make_move_san(&m).map_err(|e| InvalidPgnError::InvalidMove(e))?;
+                board.make_move_san(&m).map_err(InvalidPgnError::InvalidMove)?;
             }
             if let Some(m) = b {
-                board.make_move_san(&m).map_err(|e| InvalidPgnError::InvalidMove(e))?;
+                board.make_move_san(&m).map_err(InvalidPgnError::InvalidMove)?;
             }
         }
         match board.game_result() {
