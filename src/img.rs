@@ -1,65 +1,134 @@
 //! Generate `image-rs` images of `Position`s.
 
-use super::{Color, InvalidThemeError, Position};
-use image::{self, imageops::FilterType, DynamicImage, GenericImage, GenericImageView};
+use super::{helpers, Color, InvalidHexError, InvalidPositionImagePropertiesError, Position};
+use image::{Rgba, RgbaImage};
+use include_dir::{include_dir, Dir};
+use nsvg;
 use std::path::PathBuf;
 
-/// Represents a theme, i.e. board theme and piece style.
-/// Currently, all of Chess.com's board themes are available, but
-/// as for piece sets, only one option— "normal", is available.
-#[derive(Eq, PartialEq, Copy, Clone, Debug)]
-pub struct Theme<'a> {
-    pub board_theme: &'a str,
-    pub piece_set: &'a str,
+static ASSETS_DIR: Dir = include_dir!("assets");
+
+/// Represents an RGB color.
+#[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
+pub struct Rgb(u8, u8, u8);
+
+impl Rgb {
+    /// Creates a new instance of `Rgb`.
+    pub fn new(r: u8, g: u8, b: u8) -> Self {
+        Self(r, g, b)
+    }
+
+    /// Attempts to create a new instance of `Rgb`, from a hex color,
+    /// returning an error if the given value is invalid.
+    pub fn from_hex(hex: &str) -> Result<Self, InvalidHexError> {
+        let hex = hex.replace('#', "");
+        if hex.len() != 6 {
+            return Err(InvalidHexError(hex));
+        }
+        let mut values = Vec::new();
+        for pair in hex.chars().collect::<Vec<_>>().chunks(2) {
+            let pair: String = pair.iter().collect();
+            if let Ok(v) = u8::from_str_radix(&pair, 16) {
+                values.push(v)
+            } else {
+                return Err(InvalidHexError(hex));
+            }
+        }
+        Ok(Self(values[0], values[1], values[2]))
+    }
+
+    /// Returns the RGB values of this `Rgb` object.
+    pub fn values(&self) -> (u8, u8, u8) {
+        let Self(r, g, b) = self;
+        (*r, *g, *b)
+    }
 }
 
-impl<'a> Default for Theme<'a> {
+/// Represents the properties of an image generated from a position.
+/// The board theme can be customized with custom colors for the
+/// light and dark squares, but as for piece sets, only one
+/// option— "normal", is available.
+#[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
+pub struct PositionImageProperties<'a> {
+    /// The color to be used for the light squares of the board
+    pub light_square_color: Rgb,
+    /// The color to be used for the dark squares of the board
+    pub dark_square_color: Rgb,
+    /// The name of the built-in piece set to use
+    pub piece_set: &'a str,
+    /// The width and height of the board in pixels; this value must be greater than or equal to 8
+    pub size: usize,
+}
+
+impl<'a> Default for PositionImageProperties<'a> {
     fn default() -> Self {
         Self {
-            board_theme: "brown",
+            light_square_color: Rgb::from_hex("#f3f3f4").unwrap(),
+            dark_square_color: Rgb::from_hex("#639a59").unwrap(),
             piece_set: "normal",
+            size: 512,
         }
     }
 }
 
 /// Creates an image of a `Position`, from the perspective of the side `perspective`.
-pub fn position_to_image<'a>(position: &Position, theme: Theme<'a>, perspective: Color) -> Result<DynamicImage, InvalidThemeError<'a>> {
-    let assets_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
-    let mut content = position.content;
+pub fn position_to_image<'a>(position: &Position, props: PositionImageProperties<'a>, perspective: Color) -> Result<RgbaImage, InvalidPositionImagePropertiesError<'a>> {
+    let PositionImageProperties {
+        light_square_color,
+        dark_square_color,
+        piece_set,
+        size,
+    } = props;
+    if size < 8 {
+        return Err(InvalidPositionImagePropertiesError::InvalidSize(size));
+    }
+    let mut content = position.content.clone().into_iter().enumerate().collect::<Vec<_>>();
     let ranks: Vec<_> = if perspective.is_white() {
         content.chunks(8).rev().enumerate().collect()
     } else {
         content.reverse();
         content.chunks(8).rev().enumerate().collect()
     };
-    let mut board_image = image::open(
-        assets_path
-            .join("boards")
-            .join(format!("{perspective}"))
-            .join(format!("{}.png", theme.board_theme.replace(' ', "-").to_lowercase())),
-    )
-    .map_err(|_| InvalidThemeError(theme))?;
-    let piece_size = board_image.width() / 8;
+    let piece_size = size / 8;
+    let mut board_image = RgbaImage::new(size as u32, size as u32);
     for (ranki, rank) in ranks {
-        for (sqi, sq) in rank.iter().enumerate() {
-            if let Some(piece) = sq {
-                let piece_image = image::open(
-                    assets_path
-                        .join("pieces")
-                        .join(format!("{}", theme.piece_set))
-                        .join(format!("{}", piece.color()))
-                        .join(format!("{}.png", char::from(*piece))),
+        for (sqi, (sq, occ)) in rank.iter().enumerate() {
+            let sq_color = if helpers::color_complex_of(*sq) { light_square_color } else { dark_square_color };
+            let sq_x = sqi * piece_size;
+            let sq_y = ranki * piece_size;
+            if let Some(piece) = occ {
+                let piece_svg_path = PathBuf::from("pieces")
+                    .join(format!("{}", piece_set))
+                    .join(format!("{}", piece.color()))
+                    .join(format!("{}.svg", char::from(*piece)));
+                let piece_svg = nsvg::parse_str(
+                    ASSETS_DIR
+                        .get_file(piece_svg_path)
+                        .ok_or(InvalidPositionImagePropertiesError::InvalidPieceSet(piece_set))?
+                        .contents_utf8()
+                        .unwrap(),
+                    nsvg::Units::Pixel,
+                    96.,
                 )
-                .map_err(|_| InvalidThemeError(theme))?
-                .resize(piece_size, piece_size, FilterType::Nearest);
-                let piece_x = sqi as u32 * piece_size;
-                let piece_y = ranki as u32 * piece_size;
+                .unwrap();
+                let piece_image = piece_svg.rasterize(piece_size as f32 / piece_svg.width() * 4.).unwrap();
+                let piece_image = nsvg::image::imageops::resize(&piece_image, piece_size as u32, piece_size as u32, nsvg::image::imageops::FilterType::Nearest);
                 for y in 0..piece_size {
                     for x in 0..piece_size {
-                        let px = piece_image.get_pixel(x, y);
-                        if px.0[3] != 0 {
-                            board_image.put_pixel(piece_x + x, piece_y + y, px);
+                        let px = piece_image.get_pixel(x as u32, y as u32);
+                        let (put_x, put_y) = ((sq_x + x) as u32, (sq_y + y) as u32);
+                        if px.data[3] != 0 {
+                            board_image.put_pixel(put_x, put_y, Rgba::from(px.data));
+                        } else {
+                            board_image.put_pixel(put_x, put_y, Rgba([sq_color.0, sq_color.1, sq_color.2, 255]));
                         }
+                    }
+                }
+            } else {
+                for y in 0..piece_size {
+                    for x in 0..piece_size {
+                        let (put_x, put_y) = ((sq_x + x) as u32, (sq_y + y) as u32);
+                        board_image.put_pixel(put_x, put_y, Rgba([sq_color.0, sq_color.1, sq_color.2, 255]));
                     }
                 }
             }

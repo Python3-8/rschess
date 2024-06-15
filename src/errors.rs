@@ -1,6 +1,6 @@
 //! Contains all rschess error types.
 
-use super::{img::Theme, Move};
+use super::Move;
 use thiserror::Error;
 
 /// Conveys that the given FEN is invalid.
@@ -98,7 +98,16 @@ pub enum InvalidPgnError {
     InvalidResult(String),
 }
 
-/// Conveys that the given board/piece theme is invalid.
+/// Conveys that the given RGB or hex color is invalid.
 #[derive(Error, Debug)]
-#[error("Invalid board/piece theme: '{0:?}' is ont a valid theme")]
-pub struct InvalidThemeError<'a>(pub Theme<'a>);
+#[error("Invalid hex: '{0}' is not a valid hex color")]
+pub struct InvalidHexError(pub String);
+
+/// Conveys that the given piece set name is invalid.
+#[derive(Error, Debug)]
+pub enum InvalidPositionImagePropertiesError<'a> {
+    #[error("Invalid position image properties: the size {0} must be at least 8 pixels")]
+    InvalidSize(usize),
+    #[error("Invalid position image properties: '{0}' is not a recognized piece set")]
+    InvalidPieceSet(&'a str),
+}

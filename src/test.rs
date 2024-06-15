@@ -316,14 +316,19 @@ fn position_to_image() {
     let board = Board::from_fen(Fen::try_from("8/1r6/8/6n1/5k2/1b6/3K3N/7Q b - - 0 1").unwrap());
     img::position_to_image(
         board.position(),
-        img::Theme {
-            board_theme: "newspaper",
+        img::PositionImageProperties {
+            light_square_color: img::Rgb::from_hex("#687381").unwrap(),
+            dark_square_color: img::Rgb::from_hex("#2d313d").unwrap(),
             piece_set: "normal",
+            size: 1024,
         },
         Color::White,
     )
     .unwrap()
     .save("test1.png")
     .unwrap();
-    img::position_to_image(board.position(), img::Theme::default(), Color::Black).unwrap().save("test2.png").unwrap();
+    img::position_to_image(board.position(), img::PositionImageProperties::default(), Color::Black)
+        .unwrap()
+        .save("test2.png")
+        .unwrap();
 }

@@ -9,5 +9,7 @@ license = "MIT"
 
 [dependencies]
 image = "0.25.1"
+include_dir = "0.7.3"
+nsvg = "0.5.1"
 regex = "1.10.4"
 thiserror = "1.0.61"
