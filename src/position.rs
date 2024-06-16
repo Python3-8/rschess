@@ -241,7 +241,7 @@ impl Position {
     }
 
     /// Returns the position which would occur if the given move is played, returning an error if the move is illegal.
-    pub fn make_move(&self, move_: Move) -> Result<Self, IllegalMoveError> {
+    pub(crate) fn make_move(&self, move_: Move) -> Result<Self, IllegalMoveError> {
         let move_ = match helpers::as_legal(move_, &self.gen_non_illegal_moves()) {
             Some(m) => m,
             _ => return Err(IllegalMoveError(move_)),

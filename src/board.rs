@@ -6,7 +6,7 @@ use std::fmt;
 pub struct Board {
     /// The position on the board
     position: Position,
-    /// The number of halfmoves since the last pawn push or capture
+    /// The number of halfmoves played since the last pawn push or capture
     halfmove_clock: usize,
     /// The current fullmove number
     fullmove_number: usize,
@@ -177,7 +177,7 @@ impl Board {
         }
     }
 
-    /// Returns the number of halfmoves since the last pawn push or capture.
+    /// Returns the number of halfmoves played since the last pawn push or capture.
     pub fn halfmove_clock(&self) -> usize {
         self.halfmove_clock
     }

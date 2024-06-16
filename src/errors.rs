@@ -69,7 +69,7 @@ pub struct InvalidSquareNameError(pub char, pub char);
 
 /// Conveys that the given square index is invalid.
 #[derive(Error, Debug)]
-#[error("Invalid square index: {0}")]
+#[error("Invalid square index: {0}, a square index must be in the range 0..=63")]
 pub struct InvalidSquareIndexError(pub usize);
 
 /// Conveys that this action cannot be taken after the game is over.
@@ -98,12 +98,12 @@ pub enum InvalidPgnError {
     InvalidResult(String),
 }
 
-/// Conveys that the given RGB or hex color is invalid.
+/// Conveys that the given hex color is invalid.
 #[derive(Error, Debug)]
 #[error("Invalid hex: '{0}' is not a valid hex color")]
 pub struct InvalidHexError(pub String);
 
-/// Conveys that the given piece set name is invalid.
+/// Conveys that the given position image properties are invalid.
 #[derive(Error, Debug)]
 pub enum InvalidPositionImagePropertiesError<'a> {
     #[error("Invalid position image properties: the size {0} must be at least 8 pixels")]
