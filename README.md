@@ -1,4 +1,3 @@
-
 # rschess [![Made with Rust](https://img.shields.io/badge/made_with-rust-blue?&logo=rust)](https://rust-lang.org) [![Crates.io Version](https://img.shields.io/crates/v/rschess?logo=rust)](https://crates.io/crates/rschess) [![Crates.io Total Downloads](https://img.shields.io/crates/d/rschess?logo=rust&link=https%3A%2F%2Fcrates.io%2Fcrates%2Frschess)](https://crates.io/crates/rschess) ![Crates.io License](https://img.shields.io/crates/l/rschess) ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/Python3-8/rschess)
 A Rust chess library with the aim to be as feature-rich as possible
 
@@ -348,7 +347,7 @@ img::position_to_image(
 <details>
   <summary><em>Carlsen-Karjakin_WCC2016_R13_4.png</em></summary>
 
-  ![Carlsen-Karjakin_WCC2016_R13_4](https://github.com/Python3-8/rschess/assets/66139317/0fd3af94-26be-446d-af2d-3976b8a93d56)
+  ![Carlsen-Karjakin_WCC2016_R13_4](https://github.com/Python3-8/rschess/assets/66139317/85a58a86-4828-4b08-8d48-93130b51648b)
 </details>
 
 #### Image properties

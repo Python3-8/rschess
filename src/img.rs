@@ -97,10 +97,7 @@ pub fn position_to_image<'a>(position: &Position, props: PositionImageProperties
             let sq_x = sqi * piece_size;
             let sq_y = ranki * piece_size;
             if let Some(piece) = occ {
-                let piece_svg_path = PathBuf::from("pieces")
-                    .join(piece_set)
-                    .join(format!("{}", piece.color()))
-                    .join(format!("{}.svg", char::from(*piece)));
+                let piece_svg_path = PathBuf::from("pieces").join(piece_set).join(format!("{}", piece.color())).join(format!("{}.svg", char::from(*piece)));
                 let piece_svg = nsvg::parse_str(
                     ASSETS_DIR
                         .get_file(piece_svg_path)
@@ -111,8 +108,7 @@ pub fn position_to_image<'a>(position: &Position, props: PositionImageProperties
                     96.,
                 )
                 .unwrap();
-                let piece_image = piece_svg.rasterize(piece_size as f32 / piece_svg.width() * 4.).unwrap();
-                let piece_image = nsvg::image::imageops::resize(&piece_image, piece_size as u32, piece_size as u32, nsvg::image::imageops::FilterType::Nearest);
+                let piece_image = piece_svg.rasterize(piece_size as f32 / piece_svg.width()).unwrap();
                 for y in 0..piece_size {
                     for x in 0..piece_size {
                         let px = piece_image.get_pixel(x as u32, y as u32);
