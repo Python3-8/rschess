@@ -110,7 +110,7 @@ impl Board {
             halfmove_clock += 1;
         }
         self.position_history.push(self.position.clone());
-        self.position = self.position.make_move(move_).unwrap();
+        self.position = self.position.with_move_made(move_).unwrap();
         self.move_history.push(move_);
         (self.halfmove_clock, self.fullmove_number) = (halfmove_clock, fullmove_number);
         self.check_game_over();

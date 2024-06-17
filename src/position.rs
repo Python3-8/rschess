@@ -114,7 +114,7 @@ impl Position {
         let Self { content, .. } = self;
         let (src_occ, dest_occ) = (content[src], content[dest]);
         let ((srcf, srcr), (destf, destr)) = (helpers::idx_to_sq(src), helpers::idx_to_sq(dest));
-        let new_content = self.make_move(move_).unwrap();
+        let new_content = self.with_move_made(move_).unwrap();
         let suffix = if new_content.is_checkmate() {
             "#"
         } else if new_content.is_check() {
@@ -240,8 +240,8 @@ impl Position {
             .ok_or(InvalidSanMoveError(san.to_owned()))
     }
 
-    /// Returns the position which would occur if the given move is played, returning an error if the move is illegal.
-    pub(crate) fn make_move(&self, move_: Move) -> Result<Self, IllegalMoveError> {
+    /// Returns the position which would occur if the given move were played, returning an error if the move is illegal.
+    pub fn with_move_made(&self, move_: Move) -> Result<Self, IllegalMoveError> {
         let move_ = match helpers::as_legal(move_, &self.gen_non_illegal_moves()) {
             Some(m) => m,
             _ => return Err(IllegalMoveError(move_)),
