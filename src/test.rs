@@ -1,4 +1,4 @@
-use super::{helpers, img, Board, Color, Fen, Move, Pgn, PieceType, SpecialMoveType};
+use super::{helpers, Board, Color, Fen, Move, PieceType, SpecialMoveType};
 
 #[test]
 fn default_board() {
@@ -297,9 +297,12 @@ fn valid_make_move_san() {
     println!("{}", board.pretty_print(Color::Black));
 }
 
+#[cfg(feature = "pgn")]
 #[test]
 #[ignore]
 fn pgn() {
+    use super::pgn::Pgn;
+
     // Carlsen vs. Nepomniachtchi, 2021 FIDE World Chess Championship: test1.pgn
     // Mate-in-130 study: test2.pgn
     // Mate-in-290 study: test3.pgn
@@ -309,9 +312,12 @@ fn pgn() {
     std::fs::write("test.txt", pgn.to_string()).unwrap();
 }
 
+#[cfg(feature = "img")]
 #[test]
 #[ignore]
 fn position_to_image() {
+    use super::img;
+
     // let board = Board::default();
     let board = Board::from_fen(Fen::try_from("8/1r6/8/6n1/5k2/1b6/3K3N/7Q b - - 0 1").unwrap());
     img::position_to_image(

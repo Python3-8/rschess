@@ -6,14 +6,15 @@ mod board;
 pub mod errors;
 mod fen;
 mod helpers;
+#[cfg(feature = "img")]
 pub mod img;
-mod pgn;
+#[cfg(feature = "pgn")]
+pub mod pgn;
 mod position;
 
 pub use board::Board;
 pub(crate) use errors::*;
 pub use fen::Fen;
-pub use pgn::Pgn;
 pub use position::Position;
 use std::{collections::HashMap, fmt, ops::Not};
 

@@ -28,6 +28,11 @@ let board = Board::from_fen(Fen::try_from("2R5/4bppk/1p1p3Q/5R1P/4P3/5P2/r4q1P/7
 let starting_position = Board::default(); // equivalent to Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".try_into().unwrap())
 ```
 ### Parsing PGN
+To use PGN, you must first enable the `pgn` feature in `Cargo.toml`:
+```toml
+[dependencies]
+rschess = { git = "https://github.com/Python3-8/rschess.git", features = ["pgn"] }
+```
 <details>
   <summary><em>Carlsen-Karjakin_WCC2016_R13_4.pgn</em></summary>
 
@@ -59,7 +64,7 @@ let starting_position = Board::default(); // equivalent to Board::from_fen("rnbq
 </details>
 
 ```rs
-use rschess::{Board, Pgn};
+use rschess::{Board, pgn::Pgn};
 
 let pgn = Pgn::try_from(include_str!("Carlsen-Karjakin_WCC2016_R13_4.pgn")).unwrap();
 let board = pgn.board(); // &Board
@@ -143,6 +148,11 @@ let fen = board.to_fen(); // returns a Fen object
 assert_eq!(fen.to_string(), "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
 ```
 ### Generating PGN
+Here too, to use PGN, you must first enable the `pgn` feature in `Cargo.toml`:
+```toml
+[dependencies]
+rschess = { git = "https://github.com/Python3-8/rschess.git", features = ["pgn"] }
+```
 #### From PGN text
 <details>
   <summary><em>M290-study.pgn</em></summary>
@@ -209,7 +219,7 @@ assert_eq!(fen.to_string(), "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq 
 </details>
 
 ```rs
-use rschess::Pgn;
+use rschess::pgn::Pgn;
 
 let pgn = Pgn::try_from(include_str!("M290-study.pgn")).unwrap();
 println!("{pgn}");
@@ -237,7 +247,7 @@ assert!(pgn.to_string().contains(&pgn.board().gen_movetext()));
 #### From a board
 The `Pgn` struct provides the `Pgn::from_board` method for creating `Pgn` objects using the moves on a `Board`.
 ```rs
-use rschess::{Board, Pgn};
+use rschess::{Board, pgn::Pgn};
 
 let mut board = Board::default();
 for move_ in ["f3", "e5", "g4", "Qh4#"] {
@@ -341,6 +351,12 @@ println!("{}", board.pretty_print(Color::White));
 </details>
 
 ### Position to image
+To use this feature, you must first enable the `img` feature in `Cargo.toml`:
+```toml
+[dependencies]
+rschess = { git = "https://github.com/Python3-8/rschess.git", features = ["img"] }
+```
+Now, the `position_to_image` function can be used like so:
 ```rs
 use rschess::{Board, img};
 
