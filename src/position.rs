@@ -284,35 +284,31 @@ impl Position {
     /// Pretty-prints the position to a string, from the perspective of the side `perspective`.
     pub fn pretty_print(&self, perspective: Color) -> String {
         let mut string = String::new();
-        if perspective.is_white() {
-            for (ranki, rank) in self.content.chunks(8).rev().enumerate() {
-                string += &format!("{} |", 8 - ranki);
-                for (sqi, occupant) in rank.iter().enumerate() {
-                    string += &format!(" {} ", if let Some(p) = occupant { format!("{p}").chars().next().unwrap() } else { ' ' });
-                    if sqi != 7 {
-                        string.push('|');
-                    }
-                }
-                string.push('\n');
-                string += &"—".repeat(33);
-                string.push('\n');
-            }
-            string += "  | a | b | c | d | e | f | g | h";
+        let mut content = self.content.clone();
+        let ranks: Vec<_> = if perspective.is_white() {
+            content.chunks(8).rev().enumerate().collect()
         } else {
-            for (ranki, rank) in self.content.chunks(8).enumerate() {
-                string += &format!("{} |", ranki + 1);
-                for (sqi, occupant) in rank.iter().rev().enumerate() {
-                    string += &format!(" {} ", if let Some(p) = occupant { format!("{p}").chars().next().unwrap() } else { ' ' });
-                    if sqi != 7 {
-                        string.push('|');
-                    }
-                }
-                string.push('\n');
-                string += &"—".repeat(33);
-                string.push('\n');
-            }
-            string += "  | h | g | f | e | d | c | d | a";
+            content.reverse();
+            content.chunks(8).rev().enumerate().collect()
+        };
+        let mut file_names = ["a", "b", "c", "d", "e", "f", "g", "h"];
+        if perspective.is_black() {
+            file_names.reverse();
         }
+        string += &("  ".to_owned() + "┌" + &"─".repeat(31) + "┐\n");
+        for (ranki, rank) in ranks {
+            string += &format!("{} │", if perspective.is_white() { 8 - ranki } else { ranki + 1 },);
+            for (_sqi, occupant) in rank.iter().enumerate() {
+                string += &format!(" {} ", if let Some(p) = occupant { format!("{p}").chars().next().unwrap() } else { ' ' });
+                string.push('│');
+            }
+            string.push('\n');
+            string += &("  ".to_owned() + "└" + &"─".repeat(31) + "┘");
+            string.push('\n');
+        }
+        let mut files = vec![" "];
+        files.extend(file_names);
+        string += &(files.join(" │ ") + "  ");
         string
     }
 

@@ -294,7 +294,7 @@ fn valid_make_move_san() {
     board.make_move_san("e3").unwrap();
     board.make_move_san("e6").unwrap();
     board.make_move_san("Nge2").unwrap();
-    println!("{}", board.pretty_print(Color::Black));
+    println!("\n{}", board.pretty_print(Color::Black));
 }
 
 #[cfg(feature = "pgn")]
