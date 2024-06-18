@@ -255,7 +255,7 @@ pub enum DrawType {
     /// Represents a stalemate, with the tuple value being the side in stalemate.
     Stalemate(Color),
     InsufficientMaterial,
-    /// Currently, a claimed draw is also considered a draw by agreement.
+    /// Currently, a claimed draw and a draw by timeout vs. insufficient checkmating material are also considered a draw by agreement.
     Agreement,
 }
 

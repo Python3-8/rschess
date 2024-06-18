@@ -295,17 +295,18 @@ impl Position {
         if perspective.is_black() {
             file_names.reverse();
         }
-        string += &("  ".to_owned() + "┌" + &"─".repeat(31) + "┐\n");
+        string += &("  ".to_owned() + "┌" + &"───┬".repeat(7) + "───┐\n");
         for (ranki, rank) in ranks {
+            if ranki != 0 {
+                string += &("  ".to_owned() + "├" + &"───┼".repeat(7) + "───┤\n");
+            }
             string += &format!("{} │", if perspective.is_white() { 8 - ranki } else { ranki + 1 },);
             for (_sqi, occupant) in rank.iter().enumerate() {
-                string += &format!(" {} ", if let Some(p) = occupant { format!("{p}").chars().next().unwrap() } else { ' ' });
-                string.push('│');
+                string += &format!(" {} │", if let Some(p) = occupant { format!("{p}").chars().next().unwrap() } else { ' ' });
             }
             string.push('\n');
-            string += &("  ".to_owned() + "└" + &"─".repeat(31) + "┘");
-            string.push('\n');
         }
+        string += &("  ".to_owned() + "└" + &"───┴".repeat(7) + "───┘\n");
         let mut files = vec![" "];
         files.extend(file_names);
         string += &(files.join(" │ ") + "  ");
