@@ -1,3 +1,5 @@
+//! Handles PGN generation and manipulation.
+
 use super::{Board, Color, Fen, GameResult, InvalidPgnError};
 use regex::Regex;
 use std::{collections::HashMap, fmt};
