@@ -39,7 +39,7 @@ impl Board {
             resigned_side: None,
             draw_agreed: false,
         };
-        board.check_game_over();
+        board.update_status();
         board
     }
 
@@ -113,7 +113,7 @@ impl Board {
         self.position = self.position.with_move_made(move_).unwrap();
         self.move_history.push(move_);
         (self.halfmove_clock, self.fullmove_number) = (halfmove_clock, fullmove_number);
-        self.check_game_over();
+        self.update_status();
         Ok(())
     }
 
@@ -129,8 +129,32 @@ impl Board {
         self.make_move(move_).map_err(|_| InvalidSanMoveError(san.to_owned()))
     }
 
+    /// Attempts to play the given line of UCI moves (separated by spaces, **excluding move numbers**) on the board,
+    /// returning an error if any move is illegal. If an error is returned, the board is left unchanged, i.e. no moves
+    /// are played on the board.
+    pub fn make_moves_uci(&mut self, line: &str) -> Result<(), InvalidUciMoveError> {
+        let mut board = self.clone();
+        for uci in line.split_ascii_whitespace() {
+            board.make_move_uci(uci)?;
+        }
+        *self = board;
+        Ok(())
+    }
+
+    /// Attempts to play the given line of SAN moves (separated by spaces, **excluding move numbers**) on the board,
+    /// returning an error if any move is illegal. If an error is returned, the board is left unchanged, i.e. no moves
+    /// are played on the board.
+    pub fn make_moves_san(&mut self, line: &str) -> Result<(), InvalidSanMoveError> {
+        let mut board = self.clone();
+        for san in line.split_ascii_whitespace() {
+            board.make_move_san(san)?;
+        }
+        *self = board;
+        Ok(())
+    }
+
     /// Updates the `ongoing` property of the `Board` if the game is over
-    fn check_game_over(&mut self) {
+    fn update_status(&mut self) {
         if self.is_fivefold_repetition() || self.is_seventy_five_move_rule() || self.is_stalemate() || self.is_insufficient_material() || self.is_checkmate() {
             self.ongoing = false;
         }

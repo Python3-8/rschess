@@ -233,7 +233,7 @@ impl Position {
 
     /// Constructs a `Move` from a SAN representation, returning an error if it is invalid or illegal.
     pub fn san_to_move(&self, san: &str) -> Result<Move, InvalidSanMoveError> {
-        let san = san.replace('0', "O").replace(['+', '#'], "");
+        let san = san.trim().replace('0', "O").replace(['+', '#'], "");
         self.gen_non_illegal_moves()
             .into_iter()
             .find(|&m| self.move_to_san(m).unwrap().replace(['+', '#'], "") == san)
