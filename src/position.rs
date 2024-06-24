@@ -284,7 +284,7 @@ impl Position {
     /// Pretty-prints the position to a string, from the perspective of the side `perspective`.
     pub fn pretty_print(&self, perspective: Color) -> String {
         let mut string = String::new();
-        let mut content = self.content.clone();
+        let mut content = self.content;
         let ranks: Vec<_> = if perspective.is_white() {
             content.chunks(8).rev().enumerate().collect()
         } else {
@@ -301,7 +301,7 @@ impl Position {
                 string += &("  ".to_owned() + "├" + &"───┼".repeat(7) + "───┤\n");
             }
             string += &format!("{} │", if perspective.is_white() { 8 - ranki } else { ranki + 1 },);
-            for (_sqi, occupant) in rank.iter().enumerate() {
+            for occupant in rank.iter() {
                 string += &format!(" {} │", if let Some(p) = occupant { format!("{p}").chars().next().unwrap() } else { ' ' });
             }
             string.push('\n');

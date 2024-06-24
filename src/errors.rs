@@ -105,9 +105,9 @@ pub struct InvalidHexError(pub String);
 
 /// Conveys that the given position image properties are invalid.
 #[derive(Error, Debug)]
-pub enum InvalidPositionImagePropertiesError<'a> {
+pub enum InvalidPositionImagePropertiesError {
     #[error("Invalid position image properties: the size {0} must be at least 8 pixels")]
     InvalidSize(usize),
     #[error("Invalid position image properties: '{0}' is not a recognized piece set")]
-    InvalidPieceSet(&'a str),
+    InvalidPieceSet(String),
 }

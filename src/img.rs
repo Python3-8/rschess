@@ -46,8 +46,10 @@ impl Rgb {
 
 /// Represents the properties of an image generated from a position.
 /// The board theme can be customized with custom colors for the
-/// light and dark squares, but as for piece sets, only one
-/// option— "normal", is available.
+/// light and dark squares. As for piece sets, a set of 27 fixed
+/// options is available. These are the piece sets owned by and
+/// [listed as free to use](https://github.com/lichess-org/lila/blob/master/COPYING.md#exceptions-free)
+/// by Lichess.org.
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub struct PositionImageProperties<'a> {
     /// The color to be used for the light squares of the board
@@ -61,24 +63,32 @@ pub struct PositionImageProperties<'a> {
 }
 
 impl<'a> Default for PositionImageProperties<'a> {
+    /// The default `PositionImageProperties` has light squares colored `#f3f3f4`, dark squares
+    /// colored `#639a59`, the default piece set ([CBurnett's SVG chess pieces](https://commons.wikimedia.org/wiki/Category:SVG_chess_pieces#/media/File:Chess_Pieces_Sprite.svg)),
+    /// and a 512px by 512px board.
     fn default() -> Self {
         Self {
             light_square_color: Rgb::from_hex("#f3f3f4").unwrap(),
             dark_square_color: Rgb::from_hex("#639a59").unwrap(),
-            piece_set: "normal",
+            piece_set: "default",
             size: 512,
         }
     }
 }
 
 /// Creates an image of a `Position`, from the perspective of the side `perspective`.
-pub fn position_to_image<'a>(position: &Position, props: PositionImageProperties<'a>, perspective: Color) -> Result<RgbaImage, InvalidPositionImagePropertiesError<'a>> {
+pub fn position_to_image<'a>(position: &Position, props: PositionImageProperties<'a>, perspective: Color) -> Result<RgbaImage, InvalidPositionImagePropertiesError> {
     let PositionImageProperties {
         light_square_color,
         dark_square_color,
         piece_set,
         size,
     } = props;
+    let piece_set = piece_set.trim().to_lowercase().replace(' ', "-");
+    let piece_set = match piece_set.as_str() {
+        "default" | "normal" => "cburnett".to_owned(),
+        _ => piece_set,
+    };
     if size < 8 {
         return Err(InvalidPositionImagePropertiesError::InvalidSize(size));
     }
@@ -97,11 +107,11 @@ pub fn position_to_image<'a>(position: &Position, props: PositionImageProperties
             let sq_x = sqi * piece_size;
             let sq_y = ranki * piece_size;
             if let Some(piece) = occ {
-                let piece_svg_path = PathBuf::from("pieces").join(piece_set).join(format!("{}", piece.color())).join(format!("{}.svg", char::from(*piece)));
+                let piece_svg_path = PathBuf::from("pieces").join(&piece_set).join(format!("{}{}.svg", piece.color(), char::from(piece.piece_type())));
                 let piece_svg = nsvg::parse_str(
                     ASSETS_DIR
                         .get_file(piece_svg_path)
-                        .ok_or(InvalidPositionImagePropertiesError::InvalidPieceSet(piece_set))?
+                        .ok_or(InvalidPositionImagePropertiesError::InvalidPieceSet(piece_set.clone()))?
                         .contents_utf8()
                         .unwrap(),
                     nsvg::Units::Pixel,
