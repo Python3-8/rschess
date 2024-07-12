@@ -21,7 +21,7 @@ A Rust chess library with the aim to be as feature-rich as possible
 This project aims to be as feature-rich as possible, **at the cost of performance (this may change in the future)**. There are surprisingly very few Rust crates that offer enough features for use in applications related to chess. With rschess I strive to create a library that offers all the necessary functionalities for the development of chess software.
 ## Features
 ### Parsing FEN
-```rs
+```rust
 use rschess::{Board, Fen};
 
 let board = Board::from_fen(Fen::try_from("2R5/4bppk/1p1p3Q/5R1P/4P3/5P2/r4q1P/7K b - - 6 50").unwrap());
@@ -63,7 +63,7 @@ rschess = { git = "https://github.com/Python3-8/rschess.git", features = ["pgn"]
   Source: [Chessgames.com](https://www.chessgames.com/nodejs/game/viewGamePGN?text=1&gid=1848607)
 </details>
 
-```rs
+```rust
 use rschess::{Board, pgn::Pgn};
 
 let pgn = Pgn::try_from(include_str!("Carlsen-Karjakin_WCC2016_R13_4.pgn")).unwrap();
@@ -73,7 +73,7 @@ assert_eq!(Board::from_fen("2R5/4bppk/1p1p3Q/5R1P/4P3/5P2/r4q1P/7K b - - 6 50".t
 In the above example, the two `Board`s are not equal but their `Position`s are, because `Pgn` recognizes using the _'1-0'_ in the
 text that white has won by resignation, whereas `Fen` does not (because FEN text does not contain information about the game result).
 ### Generating legal moves
-```rs
+```rust
 use rschess::Board;
 
 let board = Board::from_fen("2R5/4bppk/1p1p3Q/5R1P/4P3/5P2/r4q1P/7K b - - 6 50".try_into().unwrap());
@@ -82,7 +82,7 @@ assert_eq!(legal_moves.len(), 2);
 ```
 Note that there are no legal moves when a game is over.
 ### Making moves
-```rs
+```rust
 use rschess::{Board, Move};
 
 let mut board = Board::default();
@@ -106,14 +106,14 @@ println!("{:?}", board.gen_legal_moves().into_iter().map(|m| board.move_to_san(m
 <details>
   <summary>Output</summary>
 
-  ```rs
+  ```rust
   ["a1b1", "d1e2", "d1f3", "d1g4", "d1h5", "e1e2", "f1e2", "f1d3", "f1c4", "f1b5", "f1a6", "g1e2", "g1f3", "g1h3", "a2a3", "a2a4", "b2b3", "b2b4", "d2d3", "d2d4", "f2f3", "f2f4", "g2g3", "g2g4", "h2h3", "h2h4", "c3a4", "c3b5", "c3d5", "c3e2", "c3b1", "e4e5"]
   ["Rb1", "Qe2", "Qf3", "Qg4", "Qh5", "Ke2", "Be2", "Bd3", "Bc4", "Bb5", "Ba6", "Nge2", "Nf3", "Nh3", "a3", "a4", "b3", "b4", "d3", "d4", "f3", "f4", "g3", "g4", "h3", "h4", "Na4", "Nb5", "Nd5", "Nce2", "Nb1", "e5"]
   ```
 </details>
 
 ### Board status
-```rs
+```rust
 use rschess::{Board, Color, GameResult, WinType};
 
 let start_pos = Board::default();
@@ -139,7 +139,7 @@ rschess detects:
 
 Note that threefold repetition and the fifty-move rule do not immediately end the game, as these are types of draws that must be claimed by a player.
 ### Generating FEN
-```rs
+```rust
 use rschess::Board;
 
 let board = Board::default();
@@ -217,7 +217,7 @@ rschess = { git = "https://github.com/Python3-8/rschess.git", features = ["pgn"]
   ```
 </details>
 
-```rs
+```rust
 use rschess::pgn::Pgn;
 
 let pgn = Pgn::try_from(include_str!("M290-study.pgn")).unwrap();
@@ -245,7 +245,7 @@ assert!(pgn.to_string().contains(&pgn.board().gen_movetext()));
 
 #### From a board
 The `Pgn` struct provides the `Pgn::from_board` method for creating `Pgn` objects using the moves on a `Board`.
-```rs
+```rust
 use rschess::{Board, pgn::Pgn};
 
 let mut board = Board::default();
@@ -287,7 +287,7 @@ println!("{pgn}");
 In this example too, PGN must follow the [Seven Tag Roster](https://en.wikipedia.org/wiki/Portable_Game_Notation#Seven_Tag_Roster), with the exception of the _Result_ tag, because this will be determined from the status of the game on the `Board`.
 ### Pretty-printing
 Pretty-printing the position from the perspective of the side whose turn it is to move:
-```rs
+```rust
 use rschess::Board;
 
 let board = Board::from_fen("2R5/4bppk/1p1p3Q/5R1P/4P3/5P2/r4q1P/7K b - - 6 50".try_into().unwrap());
@@ -314,12 +314,12 @@ println!("{board}");
   ‎  ├───┼───┼───┼───┼───┼───┼───┼───┤
   8 │   │   │   │   │   │ ♖ │   │   │
   ‎  └───┴───┴───┴───┴───┴───┴───┴───┘
-  ‎  │ h │ g │ f │ e │ d │ c │ b │ a  
+  ‎  │ h │ g │ f │ e │ d │ c │ b │ a
   ```
 </details>
 
 Pretty-printing the position from the perspective of a specific side:
-```rs
+```rust
 use rschess::{Board, Color};
 
 let board = Board::from_fen("2R5/4bppk/1p1p3Q/5R1P/4P3/5P2/r4q1P/7K b - - 6 50".try_into().unwrap());
@@ -346,7 +346,7 @@ println!("{}", board.pretty_print(Color::White));
   ‎  ├───┼───┼───┼───┼───┼───┼───┼───┤
   1 │   │   │   │   │   │   │   │ ♔ │
   ‎  └───┴───┴───┴───┴───┴───┴───┴───┘
-  ‎  │ a │ b │ c │ d │ e │ f │ g │ h  
+  ‎  │ a │ b │ c │ d │ e │ f │ g │ h
   ```
 </details>
 
@@ -357,7 +357,7 @@ To use this feature, you must first enable the `img` feature in `Cargo.toml`:
 rschess = { git = "https://github.com/Python3-8/rschess.git", features = ["img"] }
 ```
 Now, the `position_to_image` function can be used like so:
-```rs
+```rust
 use rschess::{Board, img};
 
 let board = Board::from_fen("2R5/4bppk/1p1p3Q/5R1P/4P3/5P2/r4q1P/7K b - - 6 50".try_into().unwrap());
@@ -372,7 +372,7 @@ img::position_to_image(
 ```
 <details>
   <summary><em>Carlsen-Karjakin_WCC2016_R13_4.png</em></summary>
- 
+
   ![Carlsen-Karjakin_WCC2016_R13_4](https://github.com/Python3-8/rschess/assets/66139317/da93f0c2-eb52-453d-8e76-609eefc55167)
 </details>
 
