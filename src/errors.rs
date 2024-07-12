@@ -82,6 +82,7 @@ pub enum GameOverError {
 }
 
 /// Conveys that the given PGN text is invalid.
+#[cfg(feature = "pgn")]
 #[derive(Error, Debug)]
 pub enum InvalidPgnError {
     #[error("Invalid PGN: the elements are incorrectly organized, {0}")]
@@ -99,15 +100,19 @@ pub enum InvalidPgnError {
 }
 
 /// Conveys that the given hex color is invalid.
+#[cfg(feature = "img")]
 #[derive(Error, Debug)]
 #[error("Invalid hex: '{0}' is not a valid hex color")]
 pub struct InvalidHexError(pub String);
 
 /// Conveys that the given position image properties are invalid.
+#[cfg(feature = "img")]
 #[derive(Error, Debug)]
 pub enum InvalidPositionImagePropertiesError {
     #[error("Invalid position image properties: the size {0} must be at least 8 pixels")]
     InvalidSize(usize),
-    #[error("Invalid position image properties: '{0}' is not a recognized piece set")]
-    InvalidPieceSet(String),
+    #[error("Invalid position image properties: '{0}' is not a recognized built-in piece set")]
+    InvalidBuiltinPieceSet(String),
+    #[error("Invalid position image properties: the piece set '{0:?}' does not contain all the necessary pieces")]
+    InvalidCustomPieceSet(super::img::PieceSet),
 }

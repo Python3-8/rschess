@@ -1,10 +1,10 @@
 //! Generate `image-rs` images of `Position`s.
 
 use super::{helpers, Color, InvalidHexError, InvalidPositionImagePropertiesError, Position};
-use image::{Rgba, RgbaImage};
+use image::{imageops, Rgba, RgbaImage};
 use include_dir::{include_dir, Dir};
 use nsvg;
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 static ASSETS_DIR: Dir = include_dir!("assets");
 
@@ -44,25 +44,35 @@ impl Rgb {
     }
 }
 
+#[derive(Eq, PartialEq, Clone, Debug)]
+pub enum PieceSet {
+    /// For built-in piece sets, a set of 27 fixed
+    /// options is available. These are the piece sets owned by and
+    /// [listed as free to use](https://github.com/lichess-org/lila/blob/master/COPYING.md#exceptions-free)
+    /// by Lichess.org.
+    Builtin(String),
+    /// A custom piece set must include a `HashMap` with the keys
+    /// representing the pieces ("wK", "wN", "bP", etc.) and the values
+    /// depicting the pieces.
+    Custom(HashMap<String, RgbaImage>),
+}
+
 /// Represents the properties of an image generated from a position.
 /// The board theme can be customized with custom colors for the
-/// light and dark squares. As for piece sets, a set of 27 fixed
-/// options is available. These are the piece sets owned by and
-/// [listed as free to use](https://github.com/lichess-org/lila/blob/master/COPYING.md#exceptions-free)
-/// by Lichess.org.
-#[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
-pub struct PositionImageProperties<'a> {
+/// light and dark squares, the size of the board, and custom piece sets.
+#[derive(Eq, PartialEq, Clone, Debug)]
+pub struct PositionImageProperties {
     /// The color to be used for the light squares of the board
     pub light_square_color: Rgb,
     /// The color to be used for the dark squares of the board
     pub dark_square_color: Rgb,
-    /// The name of the built-in piece set to use
-    pub piece_set: &'a str,
+    /// The piece set to use
+    pub piece_set: PieceSet,
     /// The width and height of the board in pixels; this value must be greater than or equal to 8
     pub size: usize,
 }
 
-impl<'a> Default for PositionImageProperties<'a> {
+impl Default for PositionImageProperties {
     /// The default `PositionImageProperties` has light squares colored `#f3f3f4`, dark squares
     /// colored `#639a59`, the default piece set ([CBurnett's SVG chess pieces](https://commons.wikimedia.org/wiki/Category:SVG_chess_pieces#/media/File:Chess_Pieces_Sprite.svg)),
     /// and a 512px by 512px board.
@@ -70,28 +80,33 @@ impl<'a> Default for PositionImageProperties<'a> {
         Self {
             light_square_color: Rgb::from_hex("#f3f3f4").unwrap(),
             dark_square_color: Rgb::from_hex("#639a59").unwrap(),
-            piece_set: "default",
+            piece_set: PieceSet::Builtin("default".to_owned()),
             size: 512,
         }
     }
 }
 
 /// Creates an image of a `Position`, from the perspective of the side `perspective`.
-pub fn position_to_image<'a>(position: &Position, props: PositionImageProperties<'a>, perspective: Color) -> Result<RgbaImage, InvalidPositionImagePropertiesError> {
+pub fn position_to_image(position: &Position, props: PositionImageProperties, perspective: Color) -> Result<RgbaImage, InvalidPositionImagePropertiesError> {
     let PositionImageProperties {
         light_square_color,
         dark_square_color,
         piece_set,
         size,
     } = props;
-    let piece_set = piece_set.trim().to_lowercase().replace(' ', "-");
-    let piece_set = match piece_set.as_str() {
-        "default" | "normal" => "cburnett".to_owned(),
-        _ => piece_set,
-    };
     if size < 8 {
         return Err(InvalidPositionImagePropertiesError::InvalidSize(size));
     }
+    let piece_set_name = match &piece_set {
+        PieceSet::Builtin(name) => Some({
+            let name = name.trim().to_lowercase().replace(' ', "-");
+            match name.as_str() {
+                "default" | "normal" => "cburnett".to_owned(),
+                _ => name,
+            }
+        }),
+        _ => None,
+    };
     let mut content = position.content.into_iter().enumerate().collect::<Vec<_>>();
     let ranks: Vec<_> = if perspective.is_white() {
         content.chunks(8).rev().enumerate().collect()
@@ -107,18 +122,31 @@ pub fn position_to_image<'a>(position: &Position, props: PositionImageProperties
             let sq_x = sqi * piece_size;
             let sq_y = ranki * piece_size;
             if let Some(piece) = occ {
-                let piece_svg_path = PathBuf::from("pieces").join(&piece_set).join(format!("{}{}.svg", piece.color(), char::from(piece.piece_type())));
-                let piece_svg = nsvg::parse_str(
-                    ASSETS_DIR
-                        .get_file(piece_svg_path)
-                        .ok_or(InvalidPositionImagePropertiesError::InvalidPieceSet(piece_set.clone()))?
-                        .contents_utf8()
-                        .unwrap(),
-                    nsvg::Units::Pixel,
-                    96.,
-                )
-                .unwrap();
-                let piece_image = piece_svg.rasterize(piece_size as f32 / piece_svg.width()).unwrap();
+                let piece_str = format!("{}{}", piece.color(), char::from(piece.piece_type()));
+                let piece_image = match &piece_set_name {
+                    Some(piece_set) => {
+                        let piece_svg_path = PathBuf::from("pieces").join(piece_set).join(format!("{piece_str}.svg"));
+                        let piece_svg = nsvg::parse_str(
+                            ASSETS_DIR
+                                .get_file(piece_svg_path)
+                                .ok_or(InvalidPositionImagePropertiesError::InvalidBuiltinPieceSet(piece_set.clone()))?
+                                .contents_utf8()
+                                .unwrap(),
+                            nsvg::Units::Pixel,
+                            96.,
+                        )
+                        .unwrap();
+                        piece_svg.rasterize(piece_size as f32 / piece_svg.width()).unwrap()
+                    }
+                    None => {
+                        if let PieceSet::Custom(hm) = &piece_set {
+                            let piece_img = hm.get(&piece_str).ok_or(InvalidPositionImagePropertiesError::InvalidCustomPieceSet(piece_set.clone()))?;
+                            imageops::resize(piece_img, piece_size as u32, piece_size as u32, imageops::FilterType::Nearest)
+                        } else {
+                            panic!("the universe is malfunctioning");
+                        }
+                    }
+                };
                 for y in 0..piece_size {
                     for x in 0..piece_size {
                         let px = piece_image.get_pixel(x as u32, y as u32);

@@ -325,7 +325,7 @@ fn position_to_image() {
         img::PositionImageProperties {
             light_square_color: img::Rgb::from_hex("#687381").unwrap(),
             dark_square_color: img::Rgb::from_hex("#2d313d").unwrap(),
-            piece_set: "normal",
+            piece_set: img::PieceSet::Builtin("normal".to_owned()),
             size: 1024,
         },
         Color::White,
