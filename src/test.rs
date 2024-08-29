@@ -325,7 +325,7 @@ fn position_to_image() {
         img::PositionImageProperties {
             light_square_color: img::Rgb::from_hex("#687381").unwrap(),
             dark_square_color: img::Rgb::from_hex("#2d313d").unwrap(),
-            piece_set: img::PieceSet::Builtin("normal".to_owned()),
+            piece_set: img::PieceSet::Builtin("merida".to_owned()),
             size: 1024,
         },
         Color::White,
@@ -333,8 +333,39 @@ fn position_to_image() {
     .unwrap()
     .save("test1.png")
     .unwrap();
-    img::position_to_image(board.position(), img::PositionImageProperties::default(), Color::Black)
-        .unwrap()
-        .save("test2.png")
-        .unwrap();
+    let mut pip = img::PositionImageProperties::default();
+    pip.piece_set = img::PieceSet::Builtin("horsey".to_owned());
+    img::position_to_image(board.position(), pip, Color::Black).unwrap().save("test2.png").unwrap();
+}
+
+#[cfg(feature = "img")]
+#[test]
+#[ignore]
+fn custom_piece_set() {
+    use super::img;
+    use image;
+    use nsvg;
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+
+    let board = Board::from_fen(Fen::try_from("8/1r6/8/6n1/5k2/1b6/3K3N/7Q b - - 0 1").unwrap());
+    let mut pip = img::PositionImageProperties {
+        light_square_color: img::Rgb::from_hex("#687381").unwrap(),
+        dark_square_color: img::Rgb::from_hex("#2d313d").unwrap(),
+        piece_set: img::PieceSet::default(),
+        size: 1024,
+    };
+    let mut hm = HashMap::new();
+    let set = "kiwen-suwi";
+    let dir = PathBuf::from("assets").join("pieces").join(set);
+    for fname in std::fs::read_dir(dir).unwrap() {
+        let fname = fname.unwrap();
+        let name = String::from_utf8_lossy(fname.file_name().to_string_lossy().as_bytes()).split('.').next().unwrap().to_owned();
+        let svg = nsvg::parse_str(std::fs::read_to_string(fname.path()).unwrap().as_str(), nsvg::Units::Pixel, 96.0).unwrap();
+        let piece_img = svg.rasterize(318. / svg.width()).unwrap();
+        let piece_img = image::RgbaImage::from_vec(318, 318, piece_img.to_vec()).unwrap();
+        hm.insert(name, piece_img);
+    }
+    pip.piece_set = img::PieceSet::Custom(hm);
+    img::position_to_image(board.position(), pip, Color::White).unwrap().save("test1.png").unwrap();
 }

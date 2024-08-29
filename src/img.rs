@@ -57,6 +57,12 @@ pub enum PieceSet {
     Custom(HashMap<String, RgbaImage>),
 }
 
+impl Default for PieceSet {
+    fn default() -> Self {
+        Self::Builtin("default".to_owned())
+    }
+}
+
 /// Represents the properties of an image generated from a position.
 /// The board theme can be customized with custom colors for the
 /// light and dark squares, the size of the board, and custom piece sets.
@@ -141,7 +147,12 @@ pub fn position_to_image(position: &Position, props: PositionImageProperties, pe
                     None => {
                         if let PieceSet::Custom(hm) = &piece_set {
                             let piece_img = hm.get(&piece_str).ok_or(InvalidPositionImagePropertiesError::InvalidCustomPieceSet(piece_set.clone()))?;
-                            imageops::resize(piece_img, piece_size as u32, piece_size as u32, imageops::FilterType::Nearest)
+                            nsvg::image::RgbaImage::from_vec(
+                                piece_size as u32,
+                                piece_size as u32,
+                                imageops::resize(piece_img, piece_size as u32, piece_size as u32, imageops::FilterType::Nearest).to_vec(),
+                            )
+                            .unwrap()
                         } else {
                             panic!("the universe is malfunctioning");
                         }
@@ -151,7 +162,7 @@ pub fn position_to_image(position: &Position, props: PositionImageProperties, pe
                     for x in 0..piece_size {
                         let px = piece_image.get_pixel(x as u32, y as u32);
                         let (put_x, put_y) = ((sq_x + x) as u32, (sq_y + y) as u32);
-                        if px.data[3] != 0 {
+                        if px.data[3] > 64 {
                             board_image.put_pixel(put_x, put_y, Rgba::from(px.data));
                         } else {
                             board_image.put_pixel(put_x, put_y, Rgba([sq_color.0, sq_color.1, sq_color.2, 255]));
