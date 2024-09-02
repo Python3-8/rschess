@@ -250,6 +250,36 @@ fn legal_moves() {
 }
 
 #[test]
+fn undo_move() {
+    let mut board = Board::default();
+    let start_fn = board.fullmove_number();
+    let start_hc = board.halfmove_clock();
+    assert_eq!(start_fn, 1);
+    assert_eq!(start_hc, 0);
+    println!("{board}");
+    board.make_moves_san("e4 e5 Nf3 Nc6 Bc4 Nf6").unwrap();
+    assert_eq!(board.fullmove_number(), 4);
+    assert_eq!(board.halfmove_clock(), 4);
+    println!("{board}");
+    board.undo_move().unwrap();
+    assert_eq!(board.fullmove_number(), 3);
+    assert_eq!(board.halfmove_clock(), 3);
+    board.undo_move().unwrap();
+    assert_eq!(board.fullmove_number(), 3);
+    assert_eq!(board.halfmove_clock(), 2);
+    board.make_moves_san("d4 exd4 Bc4 Nf6 O-O").unwrap();
+    assert_eq!(board.fullmove_number(), 5);
+    assert_eq!(board.halfmove_clock(), 3);
+    println!("{board}");
+    for _ in 0..9 {
+        board.undo_move().unwrap();
+    }
+    assert_eq!(board.fullmove_number(), start_fn);
+    assert_eq!(board.halfmove_clock(), start_hc);
+    println!("{board}");
+}
+
+#[test]
 fn to_san() {
     let mut board = Board::from_fen(Fen::try_from("7k/4Q3/6Q1/3Q4/6Q1/8/2Q3Q1/K3Q3 w - - 0 1").unwrap());
     assert_eq!(board.move_to_san(Move::from_uci("g6e4").unwrap()).unwrap(), "Q6e4");

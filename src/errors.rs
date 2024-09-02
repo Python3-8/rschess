@@ -48,6 +48,11 @@ pub struct InvalidColorCharacterError(pub String);
 #[error("Illegal move: {0}")]
 pub struct IllegalMoveError(pub Move);
 
+/// Conveys that no moves have been played.
+#[derive(Error, Debug)]
+#[error("No moves have been played, so the requested action cannot be carried out.")]
+pub struct NoMovesPlayedError;
+
 /// Conveys that the given UCI move is either invalid or illegal.
 #[derive(Error, Debug)]
 pub enum InvalidUciMoveError {

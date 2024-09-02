@@ -1,4 +1,7 @@
-use super::{helpers, Color, DrawType, Fen, GameOverError, GameResult, IllegalMoveError, InvalidSanMoveError, InvalidSquareNameError, InvalidUciMoveError, Move, Piece, PieceType, Position, WinType};
+use super::{
+    helpers, Color, DrawType, Fen, GameOverError, GameResult, IllegalMoveError, InvalidSanMoveError, InvalidSquareNameError, InvalidUciMoveError, Move, NoMovesPlayedError, Piece, PieceType, Position,
+    WinType,
+};
 use std::fmt;
 
 /// The structure for a chessboard/game
@@ -16,6 +19,8 @@ pub struct Board {
     position_history: Vec<Position>,
     /// The list of moves that have occurred on the board
     move_history: Vec<Move>,
+    /// The halfmove clock values that have occured
+    halfmove_clock_history: Vec<usize>,
     /// The FEN string representing the initial game state
     initial_fen: Fen,
     /// The side that has resigned (or lost by timeout)
@@ -35,6 +40,7 @@ impl Board {
             ongoing: halfmove_clock < 150,
             position_history: Vec::new(),
             move_history: Vec::new(),
+            halfmove_clock_history: Vec::new(),
             initial_fen: fen,
             resigned_side: None,
             draw_agreed: false,
@@ -112,6 +118,7 @@ impl Board {
         self.position_history.push(self.position.clone());
         self.position = self.position.with_move_made(move_).unwrap();
         self.move_history.push(move_);
+        self.halfmove_clock_history.push(self.halfmove_clock);
         (self.halfmove_clock, self.fullmove_number) = (halfmove_clock, fullmove_number);
         self.update_status();
         Ok(())
@@ -153,7 +160,24 @@ impl Board {
         Ok(())
     }
 
-    /// Updates the `ongoing` property of the `Board` if the game is over
+    /// Undoes the most recent move, returning an error if no moves have been played.
+    /// Note that if the game had ended, calling this function sets the game to ongoing again.
+    /// This will override any resignation or draw by agreement.
+    pub fn undo_move(&mut self) -> Result<(), NoMovesPlayedError> {
+        if self.move_history.is_empty() {
+            return Err(NoMovesPlayedError);
+        }
+        self.fullmove_number -= if self.side_to_move().is_white() { 1 } else { 0 };
+        self.move_history.pop();
+        self.position = self.position_history.pop().unwrap();
+        self.halfmove_clock = self.halfmove_clock_history.pop().unwrap();
+        self.ongoing = true;
+        self.resigned_side = None;
+        self.draw_agreed = false;
+        Ok(())
+    }
+
+    /// Updates the `ongoing` property of the `Board` if the game is over.
     fn update_status(&mut self) {
         if self.is_fivefold_repetition() || self.is_seventy_five_move_rule() || self.is_stalemate() || self.is_insufficient_material() || self.is_checkmate() {
             self.ongoing = false;
