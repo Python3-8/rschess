@@ -87,8 +87,8 @@ impl Board {
         }
     }
 
-    /// Generates the legal moves for a specific square in the position.
-    pub fn gen_legel_moves_sq(&self, sq: usize) -> Vec<Move> {
+    /// Generates the pseudolegal moves for a specific square in the position.
+    pub fn gen_pseudolegal_moves_sq(&self, sq: usize) -> Vec<Move> {
         if self.ongoing {
             self.position.gen_pseudolegal_moves_single_square(sq, &self.position.content[sq])
         } else {
