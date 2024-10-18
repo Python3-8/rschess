@@ -318,9 +318,16 @@ impl Position {
         if let Some(v) = legal_move_cache().lock().unwrap().get(self) {
             return v.clone();
         }
+        let v = (0..64).fold(Vec::new(), |v, i| [v, self.gen_non_illegal_moves_sq(i)].concat());
+        legal_move_cache().lock().unwrap().insert(self.clone(), v.clone());
+        v
+    }
+
+    /// Generates the legal moves **from** a specific square, assuming the game is ongoing.
+    /// The square index `i` can be converted from a square name using the [`sq_to_idx`](super::sq_to_idx) function.
+    pub fn gen_non_illegal_moves_sq(&self, i: usize) -> Vec<Move> {
         let Self { content, side, castling_rights, .. } = self;
-        let v: Vec<_> = self
-            .gen_pseudolegal_moves()
+        self.gen_pseudolegal_moves_sq(i)
             .into_iter()
             .filter(|move_| {
                 if let Move(src, dest, Some(SpecialMoveType::CastlingKingside | SpecialMoveType::CastlingQueenside)) = move_ {
@@ -333,9 +340,7 @@ impl Position {
                 }
                 !helpers::king_capture_pseudolegal(&helpers::change_content(content, move_, castling_rights), !*side)
             })
-            .collect();
-        legal_move_cache().lock().unwrap().insert(self.clone(), v.clone());
-        v
+            .collect()
     }
 
     /// Checks whether the game is drawn by stalemate. Use [`Position::stalemated_side`] to know which side is in stalemate.
@@ -383,17 +388,17 @@ impl Position {
     }
 
     /// Generates the pseudolegal moves in the position.
-    pub(crate) fn gen_pseudolegal_moves(&self) -> Vec<Move> {
+    pub fn gen_pseudolegal_moves(&self) -> Vec<Move> {
         let mut pseudolegal_moves = Vec::new();
-        for (i, sq) in self.content.iter().enumerate() {
-            let sq_moves = self.gen_pseudolegal_moves_single_square(i, sq);
-            pseudolegal_moves = [pseudolegal_moves, sq_moves].concat();
+        for i in 0..64 {
+            pseudolegal_moves.append(&mut self.gen_pseudolegal_moves_sq(i));
         }
         pseudolegal_moves
     }
 
-    /// Generates pseudolegal moves for a single square
-    pub(crate) fn gen_pseudolegal_moves_single_square(&self, i: usize, sq: &Option<Piece>) -> Vec<Move> {
+    /// Generates the pseudolegal moves **from** a specific square.
+    /// The square index `i` can be converted from a square name using the [`sq_to_idx`](super::sq_to_idx) function.
+    pub fn gen_pseudolegal_moves_sq(&self, i: usize) -> Vec<Move> {
         let Self {
             content,
             castling_rights,
@@ -401,7 +406,7 @@ impl Position {
             side,
         } = self;
         let mut pseudolegal_moves = Vec::new();
-        if let Some(piece) = sq {
+        if let Some(piece) = self.content[i] {
             if piece.1 != *side {
                 return pseudolegal_moves;
             }
@@ -542,12 +547,11 @@ impl Position {
                 long_range_type => {
                     pseudolegal_moves.append(&mut self.gen_long_range_piece_pseudolegal_moves(i, long_range_type));
                     pseudolegal_moves
-                },
+                }
             }
         } else {
             pseudolegal_moves
         }
-
     }
     /// Generates pseudolegal moves for a long-range piece.
     pub(crate) fn gen_long_range_piece_pseudolegal_moves(&self, sq: usize, piece_type: PieceType) -> Vec<Move> {

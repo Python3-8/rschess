@@ -87,15 +87,6 @@ impl Board {
         }
     }
 
-    /// Generates the pseudolegal moves for a specific square in the position.
-    pub fn gen_pseudolegal_moves_sq(&self, sq: usize) -> Vec<Move> {
-        if self.ongoing {
-            self.position.gen_pseudolegal_moves_single_square(sq, &self.position.content[sq])
-        } else {
-            Vec::new()
-        }
-    }
-
     /// Checks whether a move is legal in the position.
     pub fn is_legal(&self, move_: Move) -> bool {
         helpers::as_legal(move_, &self.gen_legal_moves()).is_some()
