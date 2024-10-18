@@ -925,7 +925,7 @@ dependencies = [
 
 [[package]]
 name = "rschess"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "image 0.25.1",
  "include_dir",

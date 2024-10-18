@@ -318,9 +318,16 @@ impl Position {
         if let Some(v) = legal_move_cache().lock().unwrap().get(self) {
             return v.clone();
         }
+        let v = (0..64).fold(Vec::new(), |v, i| [v, self.gen_non_illegal_moves_sq(i)].concat());
+        legal_move_cache().lock().unwrap().insert(self.clone(), v.clone());
+        v
+    }
+
+    /// Generates the legal moves **from** a specific square, assuming the game is ongoing.
+    /// The square index `i` can be converted from a square name using the [`sq_to_idx`](super::sq_to_idx) function.
+    pub fn gen_non_illegal_moves_sq(&self, i: usize) -> Vec<Move> {
         let Self { content, side, castling_rights, .. } = self;
-        let v: Vec<_> = self
-            .gen_pseudolegal_moves()
+        self.gen_pseudolegal_moves_sq(i)
             .into_iter()
             .filter(|move_| {
                 if let Move(src, dest, Some(SpecialMoveType::CastlingKingside | SpecialMoveType::CastlingQueenside)) = move_ {
@@ -333,9 +340,7 @@ impl Position {
                 }
                 !helpers::king_capture_pseudolegal(&helpers::change_content(content, move_, castling_rights), !*side)
             })
-            .collect();
-        legal_move_cache().lock().unwrap().insert(self.clone(), v.clone());
-        v
+            .collect()
     }
 
     /// Checks whether the game is drawn by stalemate. Use [`Position::stalemated_side`] to know which side is in stalemate.
@@ -383,7 +388,17 @@ impl Position {
     }
 
     /// Generates the pseudolegal moves in the position.
-    pub(crate) fn gen_pseudolegal_moves(&self) -> Vec<Move> {
+    pub fn gen_pseudolegal_moves(&self) -> Vec<Move> {
+        let mut pseudolegal_moves = Vec::new();
+        for i in 0..64 {
+            pseudolegal_moves.append(&mut self.gen_pseudolegal_moves_sq(i));
+        }
+        pseudolegal_moves
+    }
+
+    /// Generates the pseudolegal moves **from** a specific square.
+    /// The square index `i` can be converted from a square name using the [`sq_to_idx`](super::sq_to_idx) function.
+    pub fn gen_pseudolegal_moves_sq(&self, i: usize) -> Vec<Move> {
         let Self {
             content,
             castling_rights,
@@ -391,149 +406,153 @@ impl Position {
             side,
         } = self;
         let mut pseudolegal_moves = Vec::new();
-        for (i, sq) in content.iter().enumerate() {
-            if let Some(piece) = sq {
-                if piece.1 != *side {
-                    continue;
-                }
-                match piece.0 {
-                    PieceType::K => {
-                        let mut possible_dests = Vec::new();
-                        for axis in [1, 8, 7, 9] {
-                            if helpers::long_range_can_move(i, axis as isize) {
-                                possible_dests.push(i + axis);
-                            }
-                            if helpers::long_range_can_move(i, -(axis as isize)) {
-                                possible_dests.push(i - axis);
-                            }
+        if let Some(piece) = self.content[i] {
+            if piece.1 != *side {
+                return pseudolegal_moves;
+            }
+            match piece.0 {
+                PieceType::K => {
+                    let mut possible_dests = Vec::new();
+                    for axis in [1, 8, 7, 9] {
+                        if helpers::long_range_can_move(i, axis as isize) {
+                            possible_dests.push(i + axis);
                         }
-                        possible_dests.retain(|&dest| match content[dest] {
-                            Some(Piece(_, color)) => color != *side,
-                            _ => true,
-                        });
-                        pseudolegal_moves.extend(possible_dests.into_iter().map(|d| Move(i, d, None)));
-                        let castling_rights_idx_offset = if side.is_white() { 0 } else { 2 };
-                        let (oo_sq, ooo_sq) = if side.is_white() { (6, 2) } else { (62, 58) };
-                        let (kingside, queenside) = (castling_rights[castling_rights_idx_offset], castling_rights[castling_rights_idx_offset + 1]);
-                        if let Some(r) = kingside {
-                            match helpers::count_pieces(i + 1..=oo_sq, content) {
-                                0 => pseudolegal_moves.push(Move(i, oo_sq, Some(SpecialMoveType::CastlingKingside))),
-                                1 => {
-                                    if helpers::find_all_pieces(i + 1..=oo_sq, content)[0] == r {
-                                        pseudolegal_moves.push(Move(i, oo_sq, Some(SpecialMoveType::CastlingKingside)))
-                                    }
-                                }
-                                _ => (),
-                            }
-                        }
-                        if let Some(r) = queenside {
-                            match helpers::count_pieces(ooo_sq..i, content) {
-                                0 => pseudolegal_moves.push(Move(i, ooo_sq, Some(SpecialMoveType::CastlingQueenside))),
-                                1 => {
-                                    if helpers::find_all_pieces(ooo_sq..i, content)[0] == r {
-                                        pseudolegal_moves.push(Move(i, ooo_sq, Some(SpecialMoveType::CastlingQueenside)))
-                                    }
-                                }
-                                _ => (),
-                            }
+                        if helpers::long_range_can_move(i, -(axis as isize)) {
+                            possible_dests.push(i - axis);
                         }
                     }
-                    PieceType::N => {
-                        let b_r_axes = [(7, [-1, 8]), (9, [8, 1]), (-7, [1, -8]), (-9, [-8, -1])];
-                        let mut dest_squares = Vec::new();
-                        for (b_axis, r_axes) in b_r_axes {
-                            if !helpers::long_range_can_move(i, b_axis) {
+                    possible_dests.retain(|&dest| match content[dest] {
+                        Some(Piece(_, color)) => color != *side,
+                        _ => true,
+                    });
+                    pseudolegal_moves.extend(possible_dests.into_iter().map(|d| Move(i, d, None)));
+                    let castling_rights_idx_offset = if side.is_white() { 0 } else { 2 };
+                    let (oo_sq, ooo_sq) = if side.is_white() { (6, 2) } else { (62, 58) };
+                    let (kingside, queenside) = (castling_rights[castling_rights_idx_offset], castling_rights[castling_rights_idx_offset + 1]);
+                    if let Some(r) = kingside {
+                        match helpers::count_pieces(i + 1..=oo_sq, content) {
+                            0 => pseudolegal_moves.push(Move(i, oo_sq, Some(SpecialMoveType::CastlingKingside))),
+                            1 => {
+                                if helpers::find_all_pieces(i + 1..=oo_sq, content)[0] == r {
+                                    pseudolegal_moves.push(Move(i, oo_sq, Some(SpecialMoveType::CastlingKingside)))
+                                }
+                            }
+                            _ => (),
+                        }
+                    }
+                    if let Some(r) = queenside {
+                        match helpers::count_pieces(ooo_sq..i, content) {
+                            0 => pseudolegal_moves.push(Move(i, ooo_sq, Some(SpecialMoveType::CastlingQueenside))),
+                            1 => {
+                                if helpers::find_all_pieces(ooo_sq..i, content)[0] == r {
+                                    pseudolegal_moves.push(Move(i, ooo_sq, Some(SpecialMoveType::CastlingQueenside)))
+                                }
+                            }
+                            _ => (),
+                        }
+                    }
+                    pseudolegal_moves
+                }
+                PieceType::N => {
+                    let b_r_axes = [(7, [-1, 8]), (9, [8, 1]), (-7, [1, -8]), (-9, [-8, -1])];
+                    let mut dest_squares = Vec::new();
+                    for (b_axis, r_axes) in b_r_axes {
+                        if !helpers::long_range_can_move(i, b_axis) {
+                            continue;
+                        }
+                        let b_dest = i as isize + b_axis;
+                        for r_axis in r_axes {
+                            if !helpers::long_range_can_move(b_dest as usize, r_axis) {
                                 continue;
                             }
-                            let b_dest = i as isize + b_axis;
-                            for r_axis in r_axes {
-                                if !helpers::long_range_can_move(b_dest as usize, r_axis) {
-                                    continue;
-                                }
-                                dest_squares.push((b_dest + r_axis) as usize);
+                            dest_squares.push((b_dest + r_axis) as usize);
+                        }
+                    }
+                    pseudolegal_moves.extend(
+                        dest_squares
+                            .into_iter()
+                            .filter(|&dest| match content[dest] {
+                                Some(Piece(_, color)) => color != *side,
+                                _ => true,
+                            })
+                            .map(|dest| Move(i, dest, None)),
+                    );
+                    pseudolegal_moves
+                }
+                PieceType::P => {
+                    let mut possible_dests = Vec::new();
+                    if side.is_white() {
+                        if content[i + 8].is_none() {
+                            possible_dests.push((i + 8, false));
+                            if (8..16).contains(&i) && content[i + 16].is_none() {
+                                possible_dests.push((i + 16, false))
                             }
                         }
-                        pseudolegal_moves.extend(
-                            dest_squares
+                        if helpers::long_range_can_move(i, 7) {
+                            if let Some(Piece(_, color)) = content[i + 7] {
+                                if color.is_black() {
+                                    possible_dests.push((i + 7, false));
+                                }
+                            } else if ep_target.is_some() && ep_target.unwrap() == i + 7 {
+                                possible_dests.push((i + 7, true));
+                            }
+                        }
+                        if helpers::long_range_can_move(i, 9) {
+                            if let Some(Piece(_, color)) = content[i + 9] {
+                                if color.is_black() {
+                                    possible_dests.push((i + 9, false));
+                                }
+                            } else if ep_target.is_some() && ep_target.unwrap() == i + 9 {
+                                possible_dests.push((i + 9, true));
+                            }
+                        }
+                    } else {
+                        if content[i - 8].is_none() {
+                            possible_dests.push((i - 8, false));
+                            if (48..56).contains(&i) && content[i - 16].is_none() {
+                                possible_dests.push((i - 16, false))
+                            }
+                        }
+                        if helpers::long_range_can_move(i, -9) {
+                            if let Some(Piece(_, color)) = content[i - 9] {
+                                if color.is_white() {
+                                    possible_dests.push((i - 9, false));
+                                }
+                            } else if ep_target.is_some() && ep_target.unwrap() == i - 9 {
+                                possible_dests.push((i - 9, true));
+                            }
+                        }
+                        if helpers::long_range_can_move(i, -7) {
+                            if let Some(Piece(_, color)) = content[i - 7] {
+                                if color.is_white() {
+                                    possible_dests.push((i - 7, false));
+                                }
+                            } else if ep_target.is_some() && ep_target.unwrap() == i - 7 {
+                                possible_dests.push((i - 7, true));
+                            }
+                        }
+                    }
+                    pseudolegal_moves.extend(possible_dests.into_iter().flat_map(|(dest, ep)| {
+                        if (0..8).contains(&dest) || (56..64).contains(&dest) {
+                            [PieceType::Q, PieceType::R, PieceType::B, PieceType::N]
                                 .into_iter()
-                                .filter(|&dest| match content[dest] {
-                                    Some(Piece(_, color)) => color != *side,
-                                    _ => true,
-                                })
-                                .map(|dest| Move(i, dest, None)),
-                        )
-                    }
-                    PieceType::P => {
-                        let mut possible_dests = Vec::new();
-                        if side.is_white() {
-                            if content[i + 8].is_none() {
-                                possible_dests.push((i + 8, false));
-                                if (8..16).contains(&i) && content[i + 16].is_none() {
-                                    possible_dests.push((i + 16, false))
-                                }
-                            }
-                            if helpers::long_range_can_move(i, 7) {
-                                if let Some(Piece(_, color)) = content[i + 7] {
-                                    if color.is_black() {
-                                        possible_dests.push((i + 7, false));
-                                    }
-                                } else if ep_target.is_some() && ep_target.unwrap() == i + 7 {
-                                    possible_dests.push((i + 7, true));
-                                }
-                            }
-                            if helpers::long_range_can_move(i, 9) {
-                                if let Some(Piece(_, color)) = content[i + 9] {
-                                    if color.is_black() {
-                                        possible_dests.push((i + 9, false));
-                                    }
-                                } else if ep_target.is_some() && ep_target.unwrap() == i + 9 {
-                                    possible_dests.push((i + 9, true));
-                                }
-                            }
+                                .map(|p| Move(i, dest, Some(SpecialMoveType::Promotion(p))))
+                                .collect()
                         } else {
-                            if content[i - 8].is_none() {
-                                possible_dests.push((i - 8, false));
-                                if (48..56).contains(&i) && content[i - 16].is_none() {
-                                    possible_dests.push((i - 16, false))
-                                }
-                            }
-                            if helpers::long_range_can_move(i, -9) {
-                                if let Some(Piece(_, color)) = content[i - 9] {
-                                    if color.is_white() {
-                                        possible_dests.push((i - 9, false));
-                                    }
-                                } else if ep_target.is_some() && ep_target.unwrap() == i - 9 {
-                                    possible_dests.push((i - 9, true));
-                                }
-                            }
-                            if helpers::long_range_can_move(i, -7) {
-                                if let Some(Piece(_, color)) = content[i - 7] {
-                                    if color.is_white() {
-                                        possible_dests.push((i - 7, false));
-                                    }
-                                } else if ep_target.is_some() && ep_target.unwrap() == i - 7 {
-                                    possible_dests.push((i - 7, true));
-                                }
-                            }
+                            vec![Move(i, dest, if ep { Some(SpecialMoveType::EnPassant) } else { None })]
                         }
-                        pseudolegal_moves.extend(possible_dests.into_iter().flat_map(|(dest, ep)| {
-                            if (0..8).contains(&dest) || (56..64).contains(&dest) {
-                                [PieceType::Q, PieceType::R, PieceType::B, PieceType::N]
-                                    .into_iter()
-                                    .map(|p| Move(i, dest, Some(SpecialMoveType::Promotion(p))))
-                                    .collect()
-                            } else {
-                                vec![Move(i, dest, if ep { Some(SpecialMoveType::EnPassant) } else { None })]
-                            }
-                        }));
-                    }
-                    long_range_type => pseudolegal_moves.append(&mut self.gen_long_range_piece_pseudolegal_moves(i, long_range_type)),
+                    }));
+                    pseudolegal_moves
+                }
+                long_range_type => {
+                    pseudolegal_moves.append(&mut self.gen_long_range_piece_pseudolegal_moves(i, long_range_type));
+                    pseudolegal_moves
                 }
             }
+        } else {
+            pseudolegal_moves
         }
-        pseudolegal_moves
     }
-
     /// Generates pseudolegal moves for a long-range piece.
     pub(crate) fn gen_long_range_piece_pseudolegal_moves(&self, sq: usize, piece_type: PieceType) -> Vec<Move> {
         let Self { content, side, .. } = self;
